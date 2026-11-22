@@ -1,206 +1,401 @@
-<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TheEnd — Game Dashboard</title>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TheEnd — Dashboard</title>
 <style>
-:root{--bg:#0b0b12;--panel:#14141e;--line:#29283a;--muted:#8b8ba3;--text:#eeeefa;--purple:#9b6cff;--green:#6ee7b7}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 75% -15%,#26183d 0,transparent 42%),var(--bg);color:var(--text);font:15px Inter,Segoe UI,Arial,sans-serif;min-height:100vh}.wrap{display:flex;min-height:100vh}.sidebar{width:245px;border-right:1px solid var(--line);padding:26px 17px;background:#0d0d15;display:flex;flex-direction:column;flex-shrink:0}.logo{display:flex;align-items:center;gap:12px;margin:0 7px 35px}.mark{width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,#b47bff,#6540c3);display:grid;place-items:center;font-weight:900;font-size:20px;box-shadow:0 8px 28px #8254df45}.brand{font-size:18px;font-weight:800;letter-spacing:2px}.brand small{display:block;font-size:10px;color:var(--muted);font-weight:500;letter-spacing:1.4px;margin-top:3px}.nav-label{font-size:10px;letter-spacing:1.7px;color:#68687e;margin:12px 10px}.nav{display:flex;align-items:center;gap:12px;padding:12px;border-radius:11px;color:#a4a4b8;margin:3px 0}.nav.active{background:linear-gradient(90deg,#7d52d52c,#6844a917);color:#c9afff;border:1px solid #8b60d52b}.nav .ico{width:20px;text-align:center;font-size:17px}.sidebar-bottom{margin-top:auto}.user{display:flex;align-items:center;gap:10px;padding:12px;border-top:1px solid var(--line);margin-top:20px}.avatar{height:34px;width:34px;border-radius:50%;background:linear-gradient(135deg,#6c4bb4,#bd7aff);display:grid;place-items:center;font-weight:700}.user strong{font-size:13px}.user small{display:block;color:var(--muted);font-size:11px;margin-top:3px}main{max-width:1500px;width:100%;padding:30px 40px;margin:0 auto}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:30px}.crumb{color:var(--muted);font-size:13px}.top-right{display:flex;gap:10px;align-items:center}.status{padding:8px 12px;border:1px solid #2a413a;background:#13231e;border-radius:99px;color:var(--green);font-size:12px}.iconbtn{background:#161620;border:1px solid var(--line);color:#a8a8ba;padding:9px 12px;border-radius:10px}h1{font-size:29px;margin:0 0 8px}.sub{color:var(--muted);margin:0 0 26px}.hero{position:relative;overflow:hidden;border:1px solid #3a2c57;background:linear-gradient(110deg,#221738,#181526 58%,#161520);border-radius:18px;padding:28px 30px;margin-bottom:23px;min-height:190px}.hero:after{content:"";position:absolute;right:-55px;top:-130px;width:390px;height:390px;border-radius:50%;background:radial-gradient(circle,#8756d644,transparent 67%);pointer-events:none}.hero h2{font-size:22px;margin:0 0 9px}.hero p{color:#a6a0b8;max-width:570px;line-height:1.6;margin:0 0 22px}.primary{border:0;background:linear-gradient(135deg,#9c70f8,#744bd0);color:white;font-weight:700;padding:11px 17px;border-radius:10px;cursor:pointer}.hero-tag{position:absolute;right:35px;top:32px;color:#c6a9ff;border:1px solid #835ccf55;background:#221a32aa;padding:8px 12px;border-radius:99px;font-size:12px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:23px}.stat{border:1px solid var(--line);background:linear-gradient(145deg,#171722,#13131b);padding:19px;border-radius:15px}.stat-top{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}.stat-value{font-size:27px;font-weight:750;margin:15px 0 6px}.stat-foot{color:#7c7c91;font-size:11px}.stat-foot em{color:var(--green);font-style:normal}.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:17px}.card{border:1px solid var(--line);background:#14141d;border-radius:15px;padding:20px}.card-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:19px}.card-title h3{margin:0;font-size:15px}.link{color:#b69aff;font-size:12px}.activity,.server{display:flex;align-items:center;gap:13px;padding:13px 0;border-top:1px solid #252532}.activity-icon{height:38px;width:38px;border-radius:11px;background:#242033;display:grid;place-items:center;font-size:16px}.activity strong,.server strong{font-size:13px}.activity small,.server small{display:block;color:var(--muted);font-size:11px;margin-top:4px}.badge{margin-left:auto;font-size:11px;color:var(--green);background:#142721;padding:6px 9px;border-radius:99px}.badge.pending{color:#d9b777;background:#2a2417}.server{justify-content:space-between}.server-name{display:flex;gap:11px;align-items:center}.server-icon{width:35px;height:35px;border-radius:10px;background:#272239;display:grid;place-items:center}.online{font-size:11px;color:var(--green)}.footer{color:#606075;text-align:center;font-size:11px;margin:28px 0 4px}@media(max-width:1000px){.sidebar{width:205px}main{padding:25px}.stats{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.sidebar{width:64px;padding:17px 9px}.brand,.nav-label,.nav span:not(.ico),.user div:not(.avatar){display:none}.logo{justify-content:center;margin:0 0 24px}.nav{justify-content:center;padding:12px 7px}.user{justify-content:center;padding:12px 0}main{padding:18px 14px}.stats{gap:10px}.stat{padding:14px}.stat-value{font-size:23px}.grid{grid-template-columns:1fr}.hero-tag{display:none}h1{font-size:24px}.hero{padding:23px 20px}}
-</style></head><body><div class="wrap"><aside class="sidebar"><div class="logo"><div class="mark">E</div><div class="brand">THEEND<small>GAME DASHBOARD</small></div></div><div class="nav-label">МЕНЮ</div><div class="nav active"><span class="ico">⌂</span><span>Обзор</span></div><div class="nav"><span class="ico">▣</span><span>Мои аккаунты</span></div><div class="nav"><span class="ico">⚙</span><span>Автоматизация</span></div><div class="nav"><span class="ico">◷</span><span>Расписание</span></div><div class="nav"><span class="ico">▤</span><span>История задач</span></div><div class="nav-label">СИСТЕМА</div><div class="nav"><span class="ico">⚑</span><span>Настройки</span></div><div class="sidebar-bottom"><div class="user"><div class="avatar">U</div><div><strong>Player</strong><small>Базовый доступ</small></div></div></div></aside><main><div class="top"><div class="crumb">Панель управления　/　Обзор</div><div class="top-right"><span class="status">● Система активна</span><button class="iconbtn">♧</button></div></div><h1>Добро пожаловать в TheEnd</h1><p class="sub">Управляй игровыми инструментами в одном месте.</p><section class="hero"><span class="hero-tag">PREVIEW • DEMO</span><h2>Всё под контролем.</h2><p>Твоя игровая панель нового поколения. Следи за задачами, аккаунтами и активностью — просто и удобно.</p><button class="primary" onclick="alert('Демо-режим: функциональность скоро появится!')">Открыть центр задач　→</button></section><section class="stats"><div class="stat"><div class="stat-top"><span>Подключённые аккаунты</span><span>◉</span></div><div class="stat-value">0 <span style="font-size:14px;color:#8b8ba3">/ 5</span></div><div class="stat-foot">Пока нет аккаунтов</div></div><div class="stat"><div class="stat-top"><span>Активные задачи</span><span>↗</span></div><div class="stat-value">0</div><div class="stat-foot">Нет запущенных задач</div></div><div class="stat"><div class="stat-top"><span>Выполнено сегодня</span><span>✓</span></div><div class="stat-value">0</div><div class="stat-foot"><em>Демо-счётчик</em></div></div><div class="stat"><div class="stat-top"><span>Время работы</span><span>◷</span></div><div class="stat-value">—</div><div class="stat-foot">Нет запущенных процессов</div></div></section><section class="grid"><div class="card"><div class="card-title"><h3>Последняя активность</h3><span class="link">Вся история →</span></div><div class="activity"><div class="activity-icon">✧</div><div><strong>Добро пожаловать!</strong><small>Панель TheEnd создана · только что</small></div><span class="badge">Готово</span></div><div class="activity"><div class="activity-icon">⌘</div><div><strong>Демо-режим</strong><small>Реальные игровые действия не подключены</small></div><span class="badge pending">Демо</span></div><div class="activity"><div class="activity-icon">⬡</div><div><strong>Система ожидает</strong><small>Добавь инструменты в будущих версиях</small></div><span class="badge pending">Ожидание</span></div></div><div class="card"><div class="card-title"><h3>Мои игровые пространства</h3><span class="link">Управление →</span></div><div class="server"><div class="server-name"><div class="server-icon">♜</div><div><strong>Last Asylum</strong><small>Игровой профиль</small></div></div><span class="online">● Демо</span></div><div class="server"><div class="server-name"><div class="server-icon">＋</div><div><strong>Добавить пространство</strong><small>Новая интеграция — позже</small></div></div><span class="link">＋</span></div></div></section><div class="footer">THEEND DASHBOARD · DEMO BUILD 0.1 · Сделано для игроков</div></main></div></body></html>
+:root {
+  --bg:#0b0b12; --panel:#15151f; --border:#29283a;
+  --text:#f1eff8; --muted:#9291a8; --purple:#9668f5;
+  --green:#66ddb0; --yellow:#e5bf79; --red:#f07882;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--bg); color:var(--text);
+  font:15px Arial, sans-serif;
+  background-image:radial-gradient(ellipse at 75% -10%,#27183d,transparent 45%);
+  min-height:100vh;
+}
+button { font:inherit; cursor:pointer; }
+.layout { display:flex; min-height:100vh; }
+.sidebar {
+  width:240px; background:#0d0d15; border-right:1px solid var(--border);
+  padding:22px 15px; display:flex; flex-direction:column; flex-shrink:0;
+}
+.logo { display:flex; align-items:center; gap:11px; margin:0 8px 30px; }
+.logo-icon {
+  width:42px;height:42px;border-radius:13px;
+  background:linear-gradient(140deg,#b17bff,#6941be);
+  display:grid;place-items:center;font-size:21px;font-weight:bold;
+}
+.logo-name { font-size:18px;font-weight:800;letter-spacing:2px; }
+.logo-name small { display:block;font-size:10px;color:var(--muted);margin-top:4px;letter-spacing:1px; }
+.nav-title { font-size:10px;letter-spacing:2px;color:#65657a;margin:12px 10px; }
+.nav-btn {
+  display:flex;gap:12px;align-items:center;width:100%;
+  padding:12px;border-radius:10px;border:1px solid transparent;
+  background:transparent;color:#aaa9bc;text-align:left;margin:3px 0;
+}
+.nav-btn:hover { background:#1a1925;color:#eee; }
+.nav-btn.active {
+  color:#d0b5ff;background:#8354d51f;border-color:#8056d32c;
+}
+.nav-icon { width:22px;text-align:center;font-size:17px; }
+.sidebar-bottom { margin-top:auto; }
+.user-box { border-top:1px solid var(--border);margin-top:20px;padding:15px 8px;display:flex;gap:10px;align-items:center; }
+.avatar { width:35px;height:35px;border-radius:50%;background:linear-gradient(140deg,#7251b7,#b879f4);display:grid;place-items:center;font-weight:bold; }
+.user-box small { display:block;color:var(--muted);margin-top:4px;font-size:11px; }
+main { width:100%;max-width:1500px;margin:auto;padding:30px 38px; }
+.topbar { display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;gap:10px; }
+.crumb { color:var(--muted);font-size:13px; }
+.system-status { color:var(--green);border:1px solid #274337;background:#14241d;padding:8px 12px;border-radius:30px;font-size:12px; }
+h1 { margin:0 0 8px;font-size:29px; }
+.subtitle { color:var(--muted);margin:0 0 25px;line-height:1.6; }
+.hero {
+  border:1px solid #392b56;border-radius:17px;padding:27px 29px;
+  background:linear-gradient(110deg,#241838,#171520 70%);
+  margin-bottom:22px;position:relative;overflow:hidden;
+}
+.hero-tag { color:#c6a9ff;border:1px solid #7954b755;background:#241b35;padding:7px 11px;border-radius:30px;font-size:11px;display:inline-block;margin-bottom:16px; }
+.hero h2 { margin:0 0 10px;font-size:22px; }
+.hero p { color:#aaa4ba;line-height:1.6;max-width:600px;margin:0 0 20px; }
+.primary {
+  background:linear-gradient(135deg,#a278ff,#7047cb);border:0;color:white;
+  padding:11px 16px;border-radius:10px;font-weight:bold;
+}
+.primary:hover { filter:brightness(1.12); }
+.stats { display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px; }
+.stat,.card { border:1px solid var(--border);background:var(--panel);border-radius:14px;padding:18px; }
+.stat-label { color:var(--muted);font-size:12px; }
+.stat-value { font-size:27px;font-weight:bold;margin:13px 0 6px; }
+.stat-foot { font-size:11px;color:#77778e; }
+.grid { display:grid;grid-template-columns:1.4fr 1fr;gap:16px; }
+.card-title { display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;gap:10px; }
+.card-title h3 { font-size:15px;margin:0; }
+.activity { display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid #252532; }
+.activity-icon,.server-icon { width:38px;height:38px;border-radius:11px;background:#252134;display:grid;place-items:center;flex-shrink:0; }
+.activity strong,.server strong { font-size:13px; }
+.activity small,.server small { display:block;color:var(--muted);font-size:11px;margin-top:4px; }
+.badge { margin-left:auto;font-size:11px;color:var(--green);background:#142721;padding:6px 9px;border-radius:30px;white-space:nowrap; }
+.badge.demo { color:var(--yellow);background:#2a2417; }
+.server { display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-top:1px solid #252532; }
+.server-left { display:flex;gap:11px;align-items:center; }
+.link { color:#b79aff;font-size:12px; }
+.footer { color:#5f5f74;text-align:center;font-size:11px;margin:27px 0 5px; }
+.account-row { gap:12px; }
+.account-info { min-width:0;flex:1; }
+.account-info small { overflow-wrap:anywhere; }
+.actions { display:flex;gap:7px; }
+.icon-btn {
+  border:1px solid var(--border);background:#1b1b26;color:#aaa;
+  padding:8px 10px;border-radius:9px;
+}
+.icon-btn:hover { background:#29283a;color:white; }
+.empty { text-align:center;padding:36px 10px;color:var(--muted); }
+.empty-icon { font-size:36px;margin-bottom:12px; }
+.empty strong { color:var(--text); }
+.modal-backdrop {
+  display:none;position:fixed;inset:0;background:#000a;
+  align-items:center;justify-content:center;padding:15px;z-index:20;
+}
+.modal-backdrop.open { display:flex; }
+.modal { width:100%;max-width:440px;background:#171721;border:1px solid #343247;border-radius:17px;padding:23px;box-shadow:0 20px 80px #0008; }
+.modal h2 { margin:0 0 20px;font-size:20px; }
+.field { margin-bottom:14px; }
+.field label { display:block;font-size:12px;color:#aaa9bc;margin-bottom:7px; }
+.field input,.field select {
+  width:100%;padding:12px;border:1px solid #353447;border-radius:10px;
+  background:#101018;color:white;outline:none;
+}
+.field input:focus,.field select:focus { border-color:var(--purple); }
+.modal-buttons { display:flex;gap:10px;margin-top:20px; }
+.modal-buttons button { flex:1; }
+.secondary { padding:11px;border-radius:10px;background:#23222e;border:1px solid #363548;color:#ddd; }
+@media(max-width:1000px) {
+  main { padding:24px; }
+  .stats { grid-template-columns:repeat(2,1fr); }
+}
+@media(max-width:700px) {
+  .sidebar { width:65px;padding:15px 8px; }
+  .logo { justify-content:center;margin:0 0 25px; }
+  .logo-name,.nav-title,.nav-btn span:not(.nav-icon),.user-box div:not(.avatar) { display:none; }
+  .nav-btn { justify-content:center;padding:12px 5px; }
+  .user-box { justify-content:center;padding:12px 0; }
+  main { padding:17px 13px; }
+  .grid { grid-template-columns:1fr; }
+  .stats { gap:9px; }
+  .stat { padding:13px; }
+  .stat-value { font-size:22px; }
+  h1 { font-size:24px; }
+  .hero { padding:21px; }
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">E</div>
+    <div class="logo-name">THEEND<small>GAME DASHBOARD</small></div>
+  </div>
+
+  <div class="nav-title">МЕНЮ</div>
+  <button class="nav-btn active" data-page="home"><span class="nav-icon">⌂</span><span>Обзор</span></button>
+  <button class="nav-btn" data-page="accounts"><span class="nav-icon">▣</span><span>Мои аккаунты</span></button>
+  <button class="nav-btn" data-page="automation"><span class="nav-icon">⚙</span><span>Автоматизация</span></button>
+  <button class="nav-btn" data-page="schedule"><span class="nav-icon">◷</span><span>Расписание</span></button>
+  <button class="nav-btn" data-page="history"><span class="nav-icon">▤</span><span>История задач</span></button>
+
+  <div class="nav-title">СИСТЕМА</div>
+  <button class="nav-btn" data-page="settings"><span class="nav-icon">⚑</span><span>Настройки</span></button>
+
+  <div class="sidebar-bottom">
+    <div class="user-box">
+      <div class="avatar">U</div>
+      <div><strong>Player</strong><small>Базовый доступ</small></div>
+    </div>
+  </div>
+</aside>
+
+<main id="main"></main>
+</div>
+
+<!-- Диалог аккаунта -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h2 id="modalTitle">Добавить аккаунт</h2>
+    <form id="accountForm">
+      <div class="field">
+        <label for="accName">Игровой ник</label>
+        <input id="accName" maxlength="50" required placeholder="Введите ник">
+      </div>
+      <div class="field">
+        <label for="accUid">UID</label>
+        <input id="accUid" maxlength="80" required placeholder="ID игрового профиля">
+      </div>
+      <div class="field">
+        <label for="accServer">Сервер</label>
+        <input id="accServer" maxlength="50" required placeholder="Например, EU-1">
+      </div>
+      <div class="field">
+        <label for="accStatus">Статус профиля</label>
+        <select id="accStatus">
+          <option>Демо</option>
+          <option>Активен</option>
+          <option>Неактивен</option>
+        </select>
+      </div>
+      <div class="modal-buttons">
+        <button type="button" class="secondary" id="cancelModal">Отмена</button>
+        <button type="submit" class="primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 (() => {
-  const main = document.querySelector("main");
-  const navItems = document.querySelectorAll(".nav");
-  const home = main.innerHTML;
-  const KEY = "theend_accounts";
-  const maxAccounts = 5;
+  const main = document.getElementById("main");
+  const nav = document.querySelectorAll(".nav-btn");
+  const modal = document.getElementById("modalBackdrop");
+  const form = document.getElementById("accountForm");
+  const KEY = "theend_accounts_v2";
+  const LIMIT = 5;
+  let editingIndex = null;
+  let currentPage = "home";
 
-  const getAccounts = () => {
-    try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
-    catch { return []; }
+  const readAccounts = () => {
+    try {
+      const data = JSON.parse(localStorage.getItem(KEY) || "[]");
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
   };
+  const saveAccounts = data => localStorage.setItem(KEY, JSON.stringify(data));
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[ch]));
 
-  const save = (data) => localStorage.setItem(KEY, JSON.stringify(data));
-
-  const esc = (s) => String(s || "").replace(/[&<>"']/g, c => ({
-    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
-  }[c]));
-
-  function setActive(item) {
-    navItems.forEach(n => n.classList.remove("active"));
-    item.classList.add("active");
+  function setActive(page) {
+    nav.forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
   }
 
-  function updateCount() {
-    const el = document.querySelector(".stat-value");
-    if (el) el.innerHTML = getAccounts().length +
-      ' <span style="font-size:14px;color:#8b8ba3">/ 5</span>';
+  function topbar(section) {
+    return `<div class="topbar">
+      <div class="crumb">Панель управления　/　${esc(section)}</div>
+      <span class="system-status">● ДЕМО-СИСТЕМА</span>
+    </div>`;
   }
 
-  function accountPage() {
-    const accounts = getAccounts();
-
+  function renderHome() {
+    const accounts = readAccounts();
     main.innerHTML = `
-      <div class="top">
-        <div class="crumb">Панель управления　/　Мои аккаунты</div>
-        <div class="top-right"><span class="status">● Локальное хранение</span></div>
-      </div>
+      ${topbar("Обзор")}
+      <h1>Добро пожаловать в TheEnd</h1>
+      <p class="subtitle">Твоя игровая панель — профили и инструменты в одном месте.</p>
+      <section class="hero">
+        <span class="hero-tag">PREVIEW · DEMO</span>
+        <h2>Всё под контролем.</h2>
+        <p>Управляй профилями, следи за статусом и изучай возможности панели TheEnd.</p>
+        <button class="primary" id="goAccounts">Мои аккаунты　→</button>
+      </section>
+      <section class="stats">
+        <div class="stat"><div class="stat-label">Игровые профили</div><div class="stat-value">${accounts.length} / ${LIMIT}</div><div class="stat-foot">Сохранено в браузере</div></div>
+        <div class="stat"><div class="stat-label">Активные задачи</div><div class="stat-value">0</div><div class="stat-foot">Демо-режим</div></div>
+        <div class="stat"><div class="stat-label">Выполнено сегодня</div><div class="stat-value">0</div><div class="stat-foot">Демо-счётчик</div></div>
+        <div class="stat"><div class="stat-label">Система</div><div class="stat-value">DEMO</div><div class="stat-foot">Игровые действия отключены</div></div>
+      </section>
+      <section class="grid">
+        <div class="card">
+          <div class="card-title"><h3>Последняя активность</h3></div>
+          <div class="activity"><div class="activity-icon">✧</div><div><strong>TheEnd запущен</strong><small>Панель готова к использованию</small></div><span class="badge">Готово</span></div>
+          <div class="activity"><div class="activity-icon">▣</div><div><strong>Управление аккаунтами</strong><small>Можно добавлять игровые профили</small></div><span class="badge demo">Демо</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><h3>Игровые пространства</h3></div>
+          <div class="server"><div class="server-left"><div class="server-icon">♜</div><div><strong>Last Asylum</strong><small>Игровой профиль</small></div></div><span class="badge demo">Демо</span></div>
+          <div class="server"><div class="server-left"><div class="server-icon">＋</div><div><strong>Интеграции</strong><small>Будущие обновления</small></div></div><span class="link">Скоро</span></div>
+        </div>
+      </section>
+      <div class="footer">THEEND DASHBOARD · BUILD 0.2</div>`;
+    document.getElementById("goAccounts").onclick = () => showPage("accounts");
+  }
 
+  function renderAccounts() {
+    const accounts = readAccounts();
+    main.innerHTML = `
+      ${topbar("Мои аккаунты")}
       <h1>Мои аккаунты</h1>
-      <p class="sub">Управляй игровыми профилями в одном месте.</p>
-
+      <p class="subtitle">Сохраняй игровые профили и управляй их списком.</p>
       <section class="hero">
         <span class="hero-tag">ACCOUNT MANAGER</span>
         <h2>Игровые профили</h2>
-        <p>Добавляй, редактируй и храни информацию о своих профилях.
-        Данные сохраняются в этом браузере.</p>
+        <p>Добавляй ник, UID и сервер. Данные остаются в этом браузере. Пароли и токены здесь не используются.</p>
         <button class="primary" id="addAccount">＋ Добавить аккаунт</button>
       </section>
-
       <section class="stats">
-        <div class="stat">
-          <div class="stat-top"><span>Всего аккаунтов</span><span>◉</span></div>
-          <div class="stat-value">${accounts.length} <span style="font-size:14px;color:#8b8ba3">/ 5</span></div>
-          <div class="stat-foot">Лимит демо-версии</div>
-        </div>
-        <div class="stat">
-          <div class="stat-top"><span>Статус</span><span>⌁</span></div>
-          <div class="stat-value">DEMO</div>
-          <div class="stat-foot">Без подключения к игре</div>
-        </div>
+        <div class="stat"><div class="stat-label">Сохранено профилей</div><div class="stat-value">${accounts.length} / ${LIMIT}</div><div class="stat-foot">Лимит демо-версии</div></div>
+        <div class="stat"><div class="stat-label">Режим</div><div class="stat-value">DEMO</div><div class="stat-foot">Без подключения к игре</div></div>
       </section>
-
       <section class="card">
-        <div class="card-title">
-          <h3>Список профилей</h3>
-          <span class="link">${accounts.length} / 5</span>
-        </div>
-        <div id="accountList">
-          ${accounts.length ? accounts.map((a,i) => `
-            <div class="activity account-row" data-index="${i}">
-              <div class="activity-icon">♜</div>
-              <div style="min-width:0;flex:1">
-                <strong>${esc(a.name)}</strong>
-                <small>UID: ${esc(a.uid)} · Сервер: ${esc(a.server)}</small>
-                <small style="color:${a.status==="Активен"?"#6ee7b7":"#d9b777"}">
-                  ● ${esc(a.status)}
-                </small>
-              </div>
-              <button class="iconbtn edit" data-index="${i}" title="Редактировать">✎</button>
-              <button class="iconbtn delete" data-index="${i}" title="Удалить">✕</button>
+        <div class="card-title"><h3>Список профилей</h3><span class="link">${accounts.length} / ${LIMIT}</span></div>
+        ${accounts.length ? accounts.map((a,i) => `
+          <div class="activity account-row">
+            <div class="activity-icon">♜</div>
+            <div class="account-info">
+              <strong>${esc(a.name)}</strong>
+              <small>UID: ${esc(a.uid)} · Сервер: ${esc(a.server)}</small>
+              <small style="color:${a.status==="Активен"?"var(--green)":a.status==="Неактивен"?"var(--red)":"var(--yellow)"}">● ${esc(a.status)}</small>
             </div>
-          `).join("") : `
-            <div style="text-align:center;padding:35px 10px;color:#8b8ba3">
-              <div style="font-size:36px;margin-bottom:12px">♜</div>
-              <strong style="color:#eeeefa">Аккаунтов пока нет</strong>
-              <p>Нажми «Добавить аккаунт», чтобы создать первый профиль.</p>
+            <div class="actions">
+              <button class="icon-btn edit-btn" data-index="${i}" title="Редактировать">✎</button>
+              <button class="icon-btn delete-btn" data-index="${i}" title="Удалить">✕</button>
             </div>
-          `}
-        </div>
+          </div>
+        `).join("") : `
+          <div class="empty"><div class="empty-icon">♜</div><strong>Аккаунтов пока нет</strong><p>Нажми «Добавить аккаунт» для создания профиля.</p></div>
+        `}
       </section>
+      <div class="footer">THEEND · ACCOUNT MANAGER · DEMO</div>`;
 
-      <div class="footer">THEEND · ACCOUNT MANAGER · DEMO</div>
-    `;
+    document.getElementById("addAccount").onclick = () => openModal(null);
 
-    document.getElementById("addAccount").onclick = () => {
-      if (getAccounts().length >= maxAccounts) {
-        alert("Достигнут лимит демо-версии — 5 аккаунтов.");
-        return;
-      }
-
-      const name = prompt("Введите игровой ник:");
-      if (!name || !name.trim()) return;
-
-      const uid = prompt("Введите UID:");
-      if (!uid || !uid.trim()) return;
-
-      const server = prompt("Введите сервер:", "Основной");
-      if (!server || !server.trim()) return;
-
-      const data = getAccounts();
-      data.push({
-        name: name.trim(),
-        uid: uid.trim(),
-        server: server.trim(),
-        status: "Демо"
-      });
-      save(data);
-      accountPage();
-      updateCount();
-    };
-
-    document.querySelectorAll(".edit").forEach(btn => {
-      btn.onclick = () => {
-        const i = Number(btn.dataset.index);
-        const data = getAccounts();
-        const a = data[i];
-
-        const name = prompt("Игровой ник:", a.name);
-        if (name === null || !name.trim()) return;
-
-        const uid = prompt("UID:", a.uid);
-        if (uid === null || !uid.trim()) return;
-
-        const server = prompt("Сервер:", a.server);
-        if (server === null || !server.trim()) return;
-
-        const status = prompt("Статус (Демо / Активен / Неактивен):", a.status);
-        if (status === null) return;
-
-        data[i] = {
-          name: name.trim(),
-          uid: uid.trim(),
-          server: server.trim(),
-          status: status.trim() || "Демо"
-        };
-        save(data);
-        accountPage();
-        updateCount();
-      };
+    document.querySelectorAll(".edit-btn").forEach(btn => {
+      btn.onclick = () => openModal(Number(btn.dataset.index));
     });
 
-    document.querySelectorAll(".delete").forEach(btn => {
+    document.querySelectorAll(".delete-btn").forEach(btn => {
       btn.onclick = () => {
-        const i = Number(btn.dataset.index);
-        if (!confirm("Удалить этот аккаунт?")) return;
-        const data = getAccounts();
-        data.splice(i, 1);
-        save(data);
-        accountPage();
-        updateCount();
+        const index = Number(btn.dataset.index);
+        if (!confirm("Удалить этот профиль?")) return;
+        const data = readAccounts();
+        data.splice(index, 1);
+        saveAccounts(data);
+        renderAccounts();
       };
     });
   }
 
-  navItems.forEach(item => {
-    item.addEventListener("click", () => {
-      const label = item.innerText.trim();
+  function renderComingSoon(label) {
+    main.innerHTML = `
+      ${topbar(label)}
+      <h1>${esc(label)}</h1>
+      <p class="subtitle">Этот раздел появится в следующих обновлениях TheEnd.</p>
+      <section class="hero">
+        <span class="hero-tag">COMING SOON</span>
+        <h2>Раздел в разработке</h2>
+        <p>Мы постепенно добавляем новые функции. Пока здесь доступен демо-интерфейс.</p>
+        <button class="primary" id="backHome">← Вернуться на обзор</button>
+      </section>
+      <div class="footer">THEEND DASHBOARD · BUILD 0.2</div>`;
+    document.getElementById("backHome").onclick = () => showPage("home");
+  }
 
-      setActive(item);
+  function showPage(page) {
+    currentPage = page;
+    setActive(page);
+    if (page === "home") renderHome();
+    else if (page === "accounts") renderAccounts();
+    else {
+      const labels = {automation:"Автоматизация",schedule:"Расписание",history:"История задач",settings:"Настройки"};
+      renderComingSoon(labels[page] || "Раздел");
+    }
+  }
 
-      if (label.includes("Обзор")) {
-        main.innerHTML = home;
-        updateCount();
-      } else if (label.includes("Мои аккаунты")) {
-        accountPage();
-      } else {
-        main.innerHTML = `
-          <div class="top"><div class="crumb">Панель управления　/　${esc(label)}</div></div>
-          <h1>${esc(label)}</h1>
-          <p class="sub">Этот раздел появится в следующих обновлениях TheEnd.</p>
-          <section class="hero">
-            <span class="hero-tag">COMING SOON</span>
-            <h2>Раздел в разработке</h2>
-            <p>Мы постепенно добавляем новые возможности в панель.</p>
-            <button class="primary" id="backHome">← Вернуться на обзор</button>
-          </section>
-        `;
-        document.getElementById("backHome").onclick = () => {
-          const homeNav = [...navItems].find(n => n.innerText.includes("Обзор"));
-          setActive(homeNav);
-          main.innerHTML = home;
-          updateCount();
-        };
-      }
-    });
+  function openModal(index) {
+    const data = readAccounts();
+    if (index === null && data.length >= LIMIT) {
+      alert("Достигнут лимит демо-версии — 5 профилей.");
+      return;
+    }
+    editingIndex = index;
+    const a = index === null ? {name:"",uid:"",server:"",status:"Демо"} : data[index];
+    document.getElementById("modalTitle").textContent = index === null ? "Добавить аккаунт" : "Редактировать аккаунт";
+    document.getElementById("accName").value = a.name || "";
+    document.getElementById("accUid").value = a.uid || "";
+    document.getElementById("accServer").value = a.server || "";
+    document.getElementById("accStatus").value = a.status || "Демо";
+    modal.classList.add("open");
+    document.getElementById("accName").focus();
+  }
+
+  function closeModal() {
+    modal.classList.remove("open");
+    form.reset();
+    editingIndex = null;
+  }
+
+  nav.forEach(btn => btn.addEventListener("click", () => showPage(btn.dataset.page)));
+  document.getElementById("cancelModal").onclick = closeModal;
+  modal.addEventListener("click", e => {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeModal();
   });
 
-  updateCount();
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = document.getElementById("accName").value.trim();
+    const uid = document.getElementById("accUid").value.trim();
+    const server = document.getElementById("accServer").value.trim();
+    const status = document.getElementById("accStatus").value;
+    if (!name || !uid || !server) return;
+
+    const data = readAccounts();
+    const item = {name,uid,server,status};
+    if (editingIndex === null) data.push(item);
+    else data[editingIndex] = item;
+    saveAccounts(data);
+    closeModal();
+    renderAccounts();
+  });
+
+  showPage("home");
 })();
 </script>
+</body>
+</html>
