@@ -43,6 +43,12 @@ async function initializeDatabase() {
     );
     ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
     ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_notified_date DATE;
+    CREATE TABLE IF NOT EXISTS agent_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      device_name VARCHAR(100) NOT NULL DEFAULT '',
+      emulator_connected BOOLEAN NOT NULL DEFAULT FALSE,
+      last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
     CREATE TABLE IF NOT EXISTS task_history (
       id BIGSERIAL PRIMARY KEY,
@@ -52,6 +58,44 @@ async function initializeDatabase() {
     );
   `);
 }
+
+function requireAgentToken(req, res, next) {
+  const expected = process.env.THEEND_AGENT_TOKEN;
+  const supplied = req.get("authorization") || "";
+  if (!expected) return res.status(503).json({ error:"Агент не настроен на сервере." });
+  if (supplied !== "Bearer " + expected) return res.status(401).json({ error:"Неверный токен агента." });
+  next();
+}
+
+app.get("/api/agent/status", async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT device_name AS "deviceName", emulator_connected AS "emulatorConnected", last_seen AS "lastSeen" FROM agent_state WHERE id=1');
+    const agent = result.rows[0] || null;
+    const online = !!agent && (Date.now() - new Date(agent.lastSeen).getTime() < 45000);
+    res.json({ configured:!!process.env.THEEND_AGENT_TOKEN, online, agent });
+  } catch (error) {
+    console.error("Could not load agent status:", error.message);
+    res.status(500).json({ error:"Не удалось проверить агента." });
+  }
+});
+
+app.post("/api/agent/heartbeat", requireAgentToken, async (req, res) => {
+  const { deviceName = "Android emulator", emulatorConnected = false } = req.body || {};
+  if (typeof deviceName !== "string" || !deviceName.trim() || deviceName.length > 100 || typeof emulatorConnected !== "boolean") {
+    return res.status(400).json({ error:"Некорректный статус агента." });
+  }
+  try {
+    await pool.query(`INSERT INTO agent_state (id, device_name, emulator_connected, last_seen)
+      VALUES (1, $1, $2, NOW())
+      ON CONFLICT (id) DO UPDATE SET device_name=EXCLUDED.device_name,
+      emulator_connected=EXCLUDED.emulator_connected, last_seen=NOW()`,
+      [deviceName.trim(), emulatorConnected]);
+    res.json({ ok:true });
+  } catch (error) {
+    console.error("Could not save agent heartbeat:", error.message);
+    res.status(500).json({ error:"Не удалось сохранить статус агента." });
+  }
+});
 
 app.get("/api/health", async (_req, res) => {
   try {
