@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TheEnd Agent v7: local visual production-bubble detector for Last Asylum."""
+"""TheEnd Agent v8: ADB + OCR task automation for Last Asylum."""
 import getpass, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 
@@ -389,28 +389,33 @@ def collect_offline_production():
     # The top food/grain counter opens the production/resource panel.
     # Coordinates are based on the user's 900x1600 LDPlayer screen.
     print(time.strftime("%H:%M:%S"),"Производство: открываю панель через значок зерна.")
-    scaled_tap(153,28)
-    time.sleep(1.5)
-    for page in range(5):
+    # Screenshot provided by the user shows the wheat/food resource icon
+    # at approximately (63, 13) on a 900x1600 emulator frame.
+    scaled_tap(63,13)
+    time.sleep(2.0)
+    print(time.strftime("%H:%M:%S"),"Производство: открыл значок пшеницы (верхняя панель).")
+    for page in range(7):
         words=recognize(screen_png())
         lines=ocr_lines(words)
         joined=" | ".join(norm(x["text"]) for x in lines)
+        print(time.strftime("%H:%M:%S"),"Производство: экран панели",page+1,
+              "| распознанный текст:",joined[:500])
         offline_context=any(k in joined for k in
-                            ("офлайн","offline","сбор продукции","производств","награда"))
+                            ("офлайн","offline","сбор продукции","производств","награда","продукц"))
         claims=[x for x in lines if any(k in norm(x["text"]) for k in
                 ("собрать","забрать","получить","claim","collect"))]
-        if offline_context and claims:
-            # Only tap a claim label when the offline/production context is visible.
+        if claims and (offline_context or page>=1):
             target=max(claims,key=lambda x:x["conf"])
+            print(time.strftime("%H:%M:%S"),"Производство: найдена кнопка",target["text"],
+                  "в точке",target["x"],target["y"])
             scaled_tap(target["x"],target["y"])
-            time.sleep(1.5)
+            time.sleep(2.0)
             after=" | ".join(norm(x["text"]) for x in ocr_lines(recognize(screen_png())))
-            if any(k in after for k in ("собрано","получено","награда получена")):
-                return True,"Нажата кнопка сбора офлайн-награды; экран показал подтверждение."
-            return True,"Кнопка сбора офлайн-награды нажата; подтверждение результата не распознано."
-        if page<4:
+            return True,"Нажата кнопка сбора: "+target["text"]+". После нажатия экран: "+after[:240]
+        if page<6:
             swipe_up()
-            time.sleep(0.8)
+            time.sleep(1.0)
+    return False,"Не распознана кнопка сбора после открытия панели и 7 прокруток. Проверь журнал распознанного текста."
     return False,"В панели не распознана кнопка сбора офлайн-награды. Ничего не нажимал."
 
 def interpret_task(instruction):
@@ -504,7 +509,7 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\\platform-tools\\adb.exe")
-    print("TheEnd Agent v7 запущен (поиск пузырей сбора по изображению + OCR числа).")
+    print("TheEnd Agent v8 запущен | build 2026-11-23-offline-wheat-flow")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
