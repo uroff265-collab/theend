@@ -301,6 +301,65 @@ def run_queued_command():
         api("/api/agent/commands/"+str(c["id"])+"/result",{"ok":ok})
     except Exception as e: print("Очередь команд:",e)
 
+def interpret_task(instruction):
+    text=norm(instruction)
+    selected=[]
+    if any(x in text for x in ("ресурс","ресурсы","производств","собери город","collect resources","gather resources")):
+        selected.append("town_production")
+    intents={
+        "exploration_camp":("лагер","развед","exploration camp"),
+        "sanctuary":("святилищ","sanctuary"),
+        "alliance_help":("помощ альянс","помоги альянс","help alliance"),
+        "golden_eggs":("золот яйц","golden egg")
+    }
+    for key,terms in intents.items():
+        if any(term in text for term in terms): selected.append(key)
+    return list(dict.fromkeys(selected))
+
+def execute_task(instruction, activities):
+    selected=interpret_task(instruction)
+    if not selected:
+        return "needs_input","Пока не распознал задачу. Поддерживаемые команды: собрать ресурсы, забрать награды лагеря/святилища/золотых яиц, помочь альянсу."
+    completed=[]
+    pending=[]
+    for key in selected:
+        if key=="town_production":
+            try:
+                png=screen_png()
+                words=recognize(png)
+                action=find_collection(png,words)
+                if action:
+                    tap(action["x"],action["y"])
+                    completed.append("нажал распознанный пузырь производства")
+                else:
+                    pending.append("пузырь сбора ресурсов не найден на текущем экране")
+            except Exception as e:
+                pending.append("ошибка анализа производства: "+str(e)[:180])
+        else:
+            run_semantic_modules({key:True})
+            # The semantic executor logs only verified candidate actions. If no action is visible,
+            # report that this screen needs learning rather than claim completion.
+            pending.append("модуль "+key+": проверка действия в журнале агента; требуется подтверждение игрового результата")
+    if completed and not pending:
+        return "completed","Выполнено: "+"; ".join(completed)+"."
+    if completed or pending:
+        return "needs_input","Частично обработано. "+"; ".join(completed+pending)+"."
+    return "needs_input","На текущем экране нет распознанной безопасной цели."
+
+def poll_game_task(activities):
+    try:
+        task=api("/api/agent/tasks/next").get("task")
+        if not task: return
+        print(time.strftime("%H:%M:%S"),"Получена задача:",task.get("instruction",""))
+        try:
+            status,result=execute_task(task.get("instruction",""),activities)
+        except Exception as e:
+            status,result="failed","Ошибка выполнения: "+str(e)[:500]
+        api("/api/agent/tasks/"+str(task["id"])+"/result",{"status":status,"result":result})
+        print(time.strftime("%H:%M:%S"),"Результат задачи:",status,"—",result)
+    except Exception as e:
+        print(time.strftime("%H:%M:%S"),"Очередь ИИ:",e)
+
 def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
@@ -308,7 +367,7 @@ def main():
     print("TheEnd Agent v7 запущен (поиск пузырей сбора по изображению + OCR числа).")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
-    last_beat=last_scan=last_command_poll=last_config_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
+    last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
         now=time.time(); online=connected()
         if now-last_beat>=15:
@@ -347,6 +406,9 @@ def main():
             if now-last_command_poll>=COMMAND_POLL_SECONDS:
                 run_queued_command()
                 last_command_poll=now
+            if now-last_task_poll>=8:
+                poll_game_task(activities)
+                last_task_poll=now
         time.sleep(2)
 
 if __name__=="__main__":
