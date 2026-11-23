@@ -368,6 +368,12 @@ h1 { margin:0 0 8px;font-size:29px; }
         <div class="card-title"><h3>Подключение Android-агента</h3><span class="badge demo" id="agentBadge">Проверка…</span></div>
         <p id="agentStatusText" class="subtitle" style="margin:0">Агент связывает TheEnd с Android-эмулятором на компьютере.</p>
       </section>
+      <section class="card" style="margin-bottom:16px">
+        <div class="card-title"><h3>Проверка управления</h3><span class="badge demo">ТЕСТ</span></div>
+        <p class="subtitle" style="margin:0 0 14px">Отправляет одно касание в безопасную область игрового экрана (350, 1000). Игра должна быть открыта, агент — запущен на компьютере.</p>
+        <button class="primary" id="agentTestTap">Отправить тестовое касание</button>
+        <p id="agentCommandResult" class="task-meta" style="margin:12px 0 0">Команды пока не отправлялись.</p>
+      </section>
       <section class="stats">
         <div class="stat"><div class="stat-label">Всего задач</div><div class="stat-value">${tasks.length} / ${TASK_LIMIT}</div><div class="stat-foot">Сохранено в Neon</div></div>
         <div class="stat"><div class="stat-label">Включено</div><div class="stat-value">${tasks.filter(t => t.enabled).length}</div><div class="stat-foot">Готовы по расписанию</div></div>
@@ -413,6 +419,23 @@ h1 { margin:0 0 8px;font-size:29px; }
       if (currentPage === "automation") updateAgentStatus();
       else clearInterval(agentStatusTimer);
     }, 15000);
+    document.getElementById("agentTestTap").onclick = async () => {
+      const button = document.getElementById("agentTestTap");
+      const result = document.getElementById("agentCommandResult");
+      button.disabled = true;
+      result.textContent = "Отправляю команду агенту…";
+      try {
+        const response = await fetch("/api/agent/test-tap", {method:"POST"});
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Не удалось отправить команду.");
+        result.textContent = "Команда отправлена. Подожди пару секунд и проверь экран эмулятора.";
+        logAction("Тестовое касание отправлено", "Android agent · command " + data.commandId);
+      } catch (error) {
+        result.textContent = error.message || "Ошибка отправки команды.";
+      } finally {
+        button.disabled = false;
+      }
+    };
     document.getElementById("addTask").onclick = () => openTaskModal();
     document.getElementById("addDailyPack").onclick = async () => {
       const current = readTasks();
