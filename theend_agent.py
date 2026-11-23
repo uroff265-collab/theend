@@ -135,7 +135,11 @@ def find_collection(png, words):
             numeric.append(z)
     candidates=[]
     for cx,cy,rad in np.round(circles[0]).astype(int):
-        if cy<max(45,int(h*0.06)) or cy>int(h*0.91): continue
+        # Resource bubbles are on the central town map, not in the side HUD.
+        # Ignore top resource counters, left/right menus and bottom chat controls.
+        if not (int(w*0.18) <= cx <= int(w*0.82)): continue
+        if not (int(h*0.25) <= cy <= int(h*0.76)): continue
+        if rad < int(w*0.028) or rad > int(w*0.075): continue
         y0=max(0,cy-rad); y1=min(h,cy+rad)
         x0=max(0,cx-rad); x1=min(w,cx+rad)
         roi=hsv[y0:y1,x0:x1]
@@ -146,9 +150,14 @@ def find_collection(png, words):
         ring=(rr>rad*0.66)&(rr<rad*0.98)
         center=rr<rad*0.58
         if ring.sum()<20 or center.sum()<20: continue
-        white=np.mean((roi[:,:,1][ring]<85)&(roi[:,:,2][ring]>175))
-        colorful=np.mean(roi[:,:,1][center]>55)
-        if white<0.48 or colorful<0.12: continue
+        # The actual town collection bubbles have a pale/white rim and a
+        # green leaf/resource icon in the middle. Use green HSV pixels rather
+        # than accepting any colorful circular map decoration.
+        white=np.mean((roi[:,:,1][ring]<100)&(roi[:,:,2][ring]>180))
+        center_hsv=roi[center]
+        green=np.mean((center_hsv[:,0]>=25)&(center_hsv[:,0]<=100)&
+                      (center_hsv[:,1]>55)&(center_hsv[:,2]>65))
+        if white<0.42 or green<0.10: continue
         # In the public game UI, the amount is printed immediately beneath
         # the floating production bubble. Require a nearby numeric OCR token.
         near=[z for z in numeric if abs(z["x"]-cx)<rad*1.25
