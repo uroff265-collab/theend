@@ -369,6 +369,12 @@ h1 { margin:0 0 8px;font-size:29px; }
         <p id="agentStatusText" class="subtitle" style="margin:0">Агент связывает TheEnd с Android-эмулятором на компьютере.</p>
       </section>
       <section class="card" style="margin-bottom:16px">
+        <div class="card-title"><h3>Экран эмулятора</h3><span class="badge demo">ПРЕДПРОСМОТР</span></div>
+        <p class="subtitle" style="margin:0 0 12px">Агент автоматически передаёт свежий снимок игры. Пока это только просмотр — нажатия по распознаванию ещё не включены.</p>
+        <img id="agentScreenshot" alt="Последний снимок экрана эмулятора" style="display:block;width:100%;max-width:460px;max-height:640px;object-fit:contain;background:#111;border-radius:12px;margin:0 auto">
+        <p id="agentScreenshotCaption" class="task-meta" style="margin:10px 0 0">Ожидаю первый снимок от агента…</p>
+      </section>
+      <section class="card" style="margin-bottom:16px">
         <div class="card-title"><h3>Сбор ресурсов</h3><span class="badge demo">ТЕСТОВЫЙ МАРШРУТ</span></div>
         <p class="subtitle" style="margin:0 0 14px">Последовательно проверяет три ресурсные точки на твоей базе. Оставь игру на главном экране и не трогай эмулятор во время выполнения.</p>
         <button class="primary" id="collectResources">Собрать ресурсы</button>
@@ -420,6 +426,25 @@ h1 { margin:0 0 8px;font-size:29px; }
         label.textContent = error.message || "Не удалось проверить агента.";
       }
     }
+    async function updateAgentScreenshot() {
+      const preview = document.getElementById("agentScreenshot");
+      const caption = document.getElementById("agentScreenshotCaption");
+      if (!preview || !caption) return;
+      try {
+        const response = await fetch("/api/agent/screenshot");
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Снимок пока недоступен.");
+        preview.src = "data:image/png;base64," + data.image;
+        caption.textContent = "Последний снимок: " + new Date(data.capturedAt).toLocaleString();
+      } catch (error) {
+        caption.textContent = error.message || "Ожидаю снимок от агента…";
+      }
+    }
+    updateAgentScreenshot();
+    const screenshotTimer = setInterval(() => {
+      if (currentPage === "automation") updateAgentScreenshot();
+      else clearInterval(screenshotTimer);
+    }, 10000);
     updateAgentStatus();
     const agentStatusTimer = setInterval(() => {
       if (currentPage === "automation") updateAgentStatus();
