@@ -66,6 +66,16 @@ async function initializeDatabase() {
       completed_at TIMESTAMPTZ
     );
 
+    CREATE TABLE IF NOT EXISTS agent_tasks (
+      id BIGSERIAL PRIMARY KEY,
+      instruction TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'queued',
+      result TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ
+    );
+
     CREATE TABLE IF NOT EXISTS automation_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       activities JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -148,6 +158,74 @@ app.get("/api/agent/config", requireAgentToken, async (_req, res) => {
   } catch (error) {
     console.error("Could not load agent config:", error.message);
     res.status(500).json({error:"Не удалось загрузить конфигурацию агента."});
+  }
+});
+
+app.get("/api/agent/tasks", async (_req, res) => {
+  try {
+    const result=await pool.query(`
+      SELECT id, instruction, status, result, created_at AS "createdAt",
+             started_at AS "startedAt", completed_at AS "completedAt"
+      FROM agent_tasks ORDER BY id DESC LIMIT 20
+    `);
+    res.json(result.rows.map(row=>({...row,id:String(row.id)})));
+  } catch(error) {
+    console.error("Could not list agent tasks:",error.message);
+    res.status(500).json({error:"Не удалось загрузить задачи ИИ."});
+  }
+});
+
+app.post("/api/agent/tasks", async (req, res) => {
+  const instruction=req.body && req.body.instruction;
+  if(typeof instruction!=="string" || !instruction.trim() || instruction.trim().length>500) {
+    return res.status(400).json({error:"Напиши задачу длиной до 500 символов."});
+  }
+  try {
+    const active=await pool.query("SELECT id FROM agent_tasks WHERE status IN ('queued','running') LIMIT 1");
+    if(active.rowCount) return res.status(409).json({error:"Сначала дождись завершения текущей задачи."});
+    const result=await pool.query(
+      "INSERT INTO agent_tasks (instruction) VALUES ($1) RETURNING id, instruction, status, created_at AS \"createdAt\"",
+      [instruction.trim()]
+    );
+    res.status(201).json({...result.rows[0],id:String(result.rows[0].id)});
+  } catch(error) {
+    console.error("Could not queue agent task:",error.message);
+    res.status(500).json({error:"Не удалось поставить задачу в очередь."});
+  }
+});
+
+app.get("/api/agent/tasks/next", requireAgentToken, async (_req, res) => {
+  try {
+    const result=await pool.query(`
+      WITH next_task AS (
+        SELECT id FROM agent_tasks WHERE status='queued'
+        ORDER BY id ASC LIMIT 1 FOR UPDATE SKIP LOCKED
+      )
+      UPDATE agent_tasks AS task SET status='running', started_at=NOW()
+      FROM next_task WHERE task.id=next_task.id
+      RETURNING task.id, task.instruction
+    `);
+    res.json({task:result.rows[0]?{...result.rows[0],id:String(result.rows[0].id)}:null});
+  } catch(error) {
+    console.error("Could not fetch agent task:",error.message);
+    res.status(500).json({error:"Не удалось получить задачу ИИ."});
+  }
+});
+
+app.post("/api/agent/tasks/:id/result", requireAgentToken, async (req, res) => {
+  const id=Number(req.params.id), {status,result=""}=req.body||{};
+  if(!Number.isSafeInteger(id)||id<1||!["completed","needs_input","failed"].includes(status)||
+     typeof result!=="string"||result.length>4000) return res.status(400).json({error:"Некорректный результат задачи."});
+  try {
+    const updated=await pool.query(
+      "UPDATE agent_tasks SET status=$1,result=$2,completed_at=NOW() WHERE id=$3 AND status='running' RETURNING id",
+      [status,result,id]
+    );
+    if(!updated.rowCount) return res.status(404).json({error:"Активная задача не найдена."});
+    res.json({ok:true});
+  } catch(error) {
+    console.error("Could not save agent task result:",error.message);
+    res.status(500).json({error:"Не удалось сохранить результат задачи."});
   }
 });
 
