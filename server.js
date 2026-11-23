@@ -63,7 +63,7 @@ app.get("/api/health", async (_req, res) => {
 
 app.use(express.static(path.join(__dirname)));
 
-app.get("*", (_req, res) => {
+app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
