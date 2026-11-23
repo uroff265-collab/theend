@@ -136,28 +136,18 @@ app.post("/api/agent/test-tap", async (_req, res) => {
   }
 });
 
-app.post("/api/agent/collect-resources", async (_req, res) => {
-  const taps = [[190,555],[190,650],[105,685]];
-  const client = await pool.connect();
+app.post("/api/agent/collect-resources", requireAgentToken, async (_req, res) => {
+  // Collection is driven by the agent's local screen recognition. Never enqueue blind coordinates.
   try {
-    await client.query("BEGIN");
-    const pending = await client.query("SELECT id FROM agent_commands WHERE status IN ('pending','processing') LIMIT 1");
-    if (pending.rowCount) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({error:"Дождись завершения предыдущих команд."});
-    }
-    const ids=[];
-    for (const [x,y] of taps) {
-      const result=await client.query("INSERT INTO agent_commands (command_type,x,y) VALUES ('tap',$1,$2) RETURNING id",[x,y]);
-      ids.push(String(result.rows[0].id));
-    }
-    await client.query("COMMIT");
-    res.status(202).json({ok:true,commandIds:ids,queued:taps.length});
-  } catch(error) {
-    await client.query("ROLLBACK");
-    console.error("Could not queue resource collection:",error.message);
-    res.status(500).json({error:"Не удалось поставить сбор ресурсов в очередь."});
-  } finally { client.release(); }
+    const state = await pool.query("SELECT emulator_connected, last_seen FROM agent_state WHERE id=1");
+    const row = state.rows[0];
+    const online = !!row && row.emulator_connected && (Date.now() - new Date(row.last_seen).getTime() < 45000);
+    if (!online) return res.status(409).json({error:"Android-агент или эмулятор не подключён."});
+    res.status(202).json({ok:true,queued:0,message:"Агент выполняет локальное распознавание и сбор доступных подписанных кнопок."});
+  } catch (error) {
+    console.error("Could not check resource collection agent:", error.message);
+    res.status(500).json({error:"Не удалось проверить агента."});
+  }
 });
 
 app.get("/api/agent/commands/next", requireAgentToken, async (_req, res) => {
