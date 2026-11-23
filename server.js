@@ -41,6 +41,8 @@ async function initializeDatabase() {
       enabled BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_notified_date DATE;
 
     CREATE TABLE IF NOT EXISTS task_history (
       id BIGSERIAL PRIMARY KEY,
@@ -127,6 +129,92 @@ app.delete("/api/accounts/:id", async (req, res) => {
   } catch (error) {
     console.error("Could not delete account:", error.message);
     res.status(500).json({ error: "Не удалось удалить аккаунт." });
+  }
+});
+
+function validTaskInput(body) {
+  const { title, type, accountId = null, scheduledAt, recurrence = "once", enabled = true } = body || {};
+  if (typeof title !== "string" || !title.trim() || title.length > 70 ||
+      typeof type !== "string" || !type.trim() || type.length > 80 ||
+      !(accountId === null || (Number.isSafeInteger(accountId) && accountId > 0)) ||
+      typeof scheduledAt !== "string" ||
+      !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(scheduledAt) ||
+      Number.isNaN(new Date(scheduledAt).getTime()) ||
+      !["once", "daily"].includes(recurrence) || typeof enabled !== "boolean") {
+    return null;
+  }
+  return { title:title.trim(), type:type.trim(), accountId, scheduledAt, recurrence, enabled };
+}
+
+const taskSelect = `
+  SELECT id, title, type, account_id AS "accountId",
+         to_char(scheduled_at, 'YYYY-MM-DD"T"HH24:MI') AS "scheduledAt",
+         recurrence, enabled, notified_at AS "notifiedAt",
+         last_notified_date AS "lastNotifiedDate"
+  FROM tasks
+`;
+
+app.get("/api/tasks", async (_req, res) => {
+  try {
+    const result = await pool.query(taskSelect + " ORDER BY created_at ASC, id ASC");
+    res.json(result.rows.map(task => ({ ...task, id:String(task.id), accountId:task.accountId === null ? null : String(task.accountId), notifiedAt:task.notifiedAt || "", lastNotifiedDate:task.lastNotifiedDate || "" })));
+  } catch (error) {
+    console.error("Could not load tasks:", error.message);
+    res.status(500).json({ error: "Не удалось загрузить задачи." });
+  }
+});
+
+app.post("/api/tasks", async (req, res) => {
+  const task = validTaskInput(req.body);
+  if (!task) return res.status(400).json({ error: "Проверь название, тип, дату, повторение и профиль задачи." });
+  try {
+    const result = await pool.query(
+      `INSERT INTO tasks (title, type, account_id, scheduled_at, recurrence, enabled)
+       VALUES ($1, $2, $3, $4::timestamp, $5, $6)
+       RETURNING id, title, type, account_id AS "accountId",
+         to_char(scheduled_at, 'YYYY-MM-DD"T"HH24:MI') AS "scheduledAt",
+         recurrence, enabled`,
+      [task.title, task.type, task.accountId, task.scheduledAt, task.recurrence, task.enabled]
+    );
+    res.status(201).json({ ...result.rows[0], id:String(result.rows[0].id), accountId:result.rows[0].accountId === null ? null : String(result.rows[0].accountId) });
+  } catch (error) {
+    console.error("Could not create task:", error.message);
+    res.status(500).json({ error: "Не удалось создать задачу. Проверь, что выбранный аккаунт существует." });
+  }
+});
+
+app.put("/api/tasks/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const task = validTaskInput(req.body);
+  if (!Number.isSafeInteger(id) || id < 1 || !task) return res.status(400).json({ error: "Проверь данные задачи." });
+  try {
+    const result = await pool.query(
+      `UPDATE tasks SET title=$1, type=$2, account_id=$3, scheduled_at=$4::timestamp,
+         recurrence=$5, enabled=$6
+       WHERE id=$7
+       RETURNING id, title, type, account_id AS "accountId",
+         to_char(scheduled_at, 'YYYY-MM-DD"T"HH24:MI') AS "scheduledAt",
+         recurrence, enabled`,
+      [task.title, task.type, task.accountId, task.scheduledAt, task.recurrence, task.enabled, id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Задача не найдена." });
+    res.json({ ...result.rows[0], id:String(result.rows[0].id), accountId:result.rows[0].accountId === null ? null : String(result.rows[0].accountId) });
+  } catch (error) {
+    console.error("Could not update task:", error.message);
+    res.status(500).json({ error: "Не удалось обновить задачу. Проверь выбранный аккаунт." });
+  }
+});
+
+app.delete("/api/tasks/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "Некорректный ID задачи." });
+  try {
+    const result = await pool.query("DELETE FROM tasks WHERE id=$1 RETURNING id", [id]);
+    if (!result.rowCount) return res.status(404).json({ error: "Задача не найдена." });
+    res.json({ ok:true, deleted:String(id) });
+  } catch (error) {
+    console.error("Could not delete task:", error.message);
+    res.status(500).json({ error: "Не удалось удалить задачу." });
   }
 });
 
