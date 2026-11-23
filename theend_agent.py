@@ -2,7 +2,7 @@
 """TheEnd Agent v12: accessibility-grounded guarded automation."""
 import getpass, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
-from theend_vision import parse_hierarchy, choose_action
+from theend_vision import parse_hierarchy, choose_action, analyze_screen
 
 BASE_URL=os.environ.get("THEEND_URL","https://theend-1.onrender.com").strip().rstrip("/")
 ADB=os.environ.get("THEEND_ADB",r"C:\platform-tools\adb.exe" if os.name=="nt" else "adb").strip()
@@ -351,6 +351,7 @@ def learn_screen():
         words=recognize(png)
         im=Image.open(io.BytesIO(png))
         width,height=im.size
+        screen_state=analyze_screen(words,width,height)
         labels=sorted(set(n["label"] for n in nodes))
         if not labels:
             labels=sorted(set(norm(w["text"]) for w in words if w["conf"]>=75))
@@ -365,6 +366,7 @@ def learn_screen():
         entry["visits"]=int(entry.get("visits",0))+1
         entry["lastSeen"]=int(time.time())
         entry["resolution"]=[width,height]
+        entry["screenState"]=screen_state
         entry["controls"]=[{"label":n["label"],"x":round(n["x"]/width,4),"y":round(n["y"]/height,4),
                             "clickable":n["clickable"],"enabled":n["enabled"]}
                            for n in nodes if n["clickable"]]
