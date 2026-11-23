@@ -20,8 +20,6 @@ const pool = new Pool({
 app.disable("x-powered-by");
 app.use(express.json({ limit: "5mb" }));
 
-let latestAgentScreenshot = null;
-
 async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accounts (
@@ -90,20 +88,6 @@ app.get("/api/agent/status", async (_req, res) => {
   }
 });
 
-app.post("/api/agent/screenshot", requireAgentToken, (req, res) => {
-  const { image } = req.body || {};
-  if (typeof image !== "string" || image.length > 4500000 || !/^[A-Za-z0-9+/]+=*$/.test(image)) {
-    return res.status(400).json({ error:"Некорректный снимок экрана." });
-  }
-  latestAgentScreenshot = { image, capturedAt: new Date().toISOString() };
-  res.json({ ok:true, capturedAt:latestAgentScreenshot.capturedAt });
-});
-
-app.get("/api/agent/screenshot", (_req, res) => {
-  if (!latestAgentScreenshot) return res.status(404).json({ error:"Снимка пока нет." });
-  res.json(latestAgentScreenshot);
-});
-
 app.post("/api/agent/heartbeat", requireAgentToken, async (req, res) => {
   const { deviceName = "Android emulator", emulatorConnected = false } = req.body || {};
   if (typeof deviceName !== "string" || !deviceName.trim() || deviceName.length > 100 || typeof emulatorConnected !== "boolean") {
@@ -122,20 +106,6 @@ app.post("/api/agent/heartbeat", requireAgentToken, async (req, res) => {
   }
 });
 
-app.post("/api/agent/test-tap", async (_req, res) => {
-  try {
-    const pending = await pool.query("SELECT id FROM agent_commands WHERE status IN ('pending','processing') ORDER BY id DESC LIMIT 1");
-    if (pending.rowCount) return res.status(409).json({ error:"Дождись завершения предыдущей команды." });
-    const result = await pool.query(
-      "INSERT INTO agent_commands (command_type, x, y) VALUES ('tap', 350, 1000) RETURNING id"
-    );
-    res.status(202).json({ ok:true, commandId:String(result.rows[0].id), message:"Тестовое касание отправлено агенту." });
-  } catch (error) {
-    console.error("Could not queue agent test tap:", error.message);
-    res.status(500).json({ error:"Не удалось отправить команду агенту." });
-  }
-});
-
 app.post("/api/agent/collect-resources", async (_req, res) => {
   // Collection is driven by the agent's local screen recognition. Never enqueue blind coordinates.
   try {
@@ -143,7 +113,7 @@ app.post("/api/agent/collect-resources", async (_req, res) => {
     const row = state.rows[0];
     const online = !!row && row.emulator_connected && (Date.now() - new Date(row.last_seen).getTime() < 45000);
     if (!online) return res.status(409).json({error:"Android-агент или эмулятор не подключён."});
-    res.status(202).json({ok:true,queued:0,message:"Агент выполняет локальное распознавание и сбор доступных подписанных кнопок."});
+    res.status(202).json({ok:true,queued:0,message:"Запрос принят. Агент непрерывно анализирует экран локально; автоматическое действие выполняется только при распознанной цели."});
   } catch (error) {
     console.error("Could not check resource collection agent:", error.message);
     res.status(500).json({error:"Не удалось проверить агента."});
