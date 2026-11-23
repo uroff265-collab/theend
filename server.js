@@ -56,6 +56,15 @@ async function initializeDatabase() {
       detail TEXT NOT NULL DEFAULT '',
       occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS agent_commands (
+      id BIGSERIAL PRIMARY KEY,
+      command_type VARCHAR(20) NOT NULL CHECK (command_type IN ('tap')),
+      x INTEGER NOT NULL,
+      y INTEGER NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    );
   `);
 }
 
@@ -94,6 +103,44 @@ app.post("/api/agent/heartbeat", requireAgentToken, async (req, res) => {
   } catch (error) {
     console.error("Could not save agent heartbeat:", error.message);
     res.status(500).json({ error:"Не удалось сохранить статус агента." });
+  }
+});
+
+app.post("/api/agent/test-tap", async (_req, res) => {
+  try {
+    const pending = await pool.query("SELECT id FROM agent_commands WHERE status IN ('pending','processing') ORDER BY id DESC LIMIT 1");
+    if (pending.rowCount) return res.status(409).json({ error:"Дождись завершения предыдущей команды." });
+    const result = await pool.query(
+      "INSERT INTO agent_commands (command_type, x, y) VALUES ('tap', 350, 1000) RETURNING id"
+    );
+    res.status(202).json({ ok:true, commandId:String(result.rows[0].id), message:"Тестовое касание отправлено агенту." });
+  } catch (error) {
+    console.error("Could not queue agent test tap:", error.message);
+    res.status(500).json({ error:"Не удалось отправить команду агенту." });
+  }
+});
+
+app.get("/api/agent/commands/next", requireAgentToken, async (_req, res) => {
+  try {
+    const result = await pool.query("UPDATE agent_commands SET status='processing' WHERE id=(SELECT id FROM agent_commands WHERE status='pending' ORDER BY id ASC FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id, command_type AS type, x, y");
+    res.json({ command: result.rows[0] ? { ...result.rows[0], id:String(result.rows[0].id) } : null });
+  } catch (error) {
+    console.error("Could not fetch agent command:", error.message);
+    res.status(500).json({ error:"Не удалось получить команду." });
+  }
+});
+
+app.post("/api/agent/commands/:id/result", requireAgentToken, async (req, res) => {
+  const id = Number(req.params.id);
+  const { ok } = req.body || {};
+  if (!Number.isSafeInteger(id) || id < 1 || typeof ok !== "boolean") return res.status(400).json({ error:"Некорректный результат команды." });
+  try {
+    const result = await pool.query("UPDATE agent_commands SET status=$1, completed_at=NOW() WHERE id=$2 AND status='processing' RETURNING id", [ok ? "completed" : "failed", id]);
+    if (!result.rowCount) return res.status(404).json({ error:"Команда не найдена." });
+    res.json({ ok:true });
+  } catch (error) {
+    console.error("Could not save agent command result:", error.message);
+    res.status(500).json({ error:"Не удалось сохранить результат команды." });
   }
 });
 
