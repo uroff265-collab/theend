@@ -1,328 +1,187 @@
 #!/usr/bin/env python3
-"""TheEnd Agent: Android ADB heartbeat and limited tap-command runner."""
-import getpass
-import base64
-import json
-import os
-import platform
-import re
-import shutil
-import subprocess
-import time
-import urllib.error
-import urllib.request
-import sys
+"""TheEnd Agent v6: local-only OCR collection assistant for Last Asylum."""
+import getpass, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 
-BASE_URL = os.environ.get("THEEND_URL", "https://theend-1.onrender.com").strip().rstrip("/")
-ADB = os.environ.get("THEEND_ADB", r"C:\platform-tools\adb.exe" if os.name == "nt" else "adb").strip()
-ADB_SERIAL = os.environ.get("THEEND_ADB_SERIAL", "127.0.0.1:5555").strip()
-DEVICE_NAME = os.environ.get("THEEND_DEVICE_NAME", platform.node() or "Android emulator")
+BASE_URL=os.environ.get("THEEND_URL","https://theend-1.onrender.com").strip().rstrip("/")
+ADB=os.environ.get("THEEND_ADB",r"C:\platform-tools\adb.exe" if os.name=="nt" else "adb").strip()
+SERIAL=os.environ.get("THEEND_ADB_SERIAL","127.0.0.1:5555").strip()
+DEVICE=os.environ.get("THEEND_DEVICE_NAME",platform.node() or "Android emulator")
+SCAN_SECONDS=5
+COOLDOWN=35
 
-
-def get_token():
-    token = os.environ.get("THEEND_AGENT_TOKEN", "").strip()
-    if not token and sys.platform == "win32":
-        try:
-            import winreg
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-                token, _ = winreg.QueryValueEx(key, "THEEND_AGENT_TOKEN")
-            token = token.strip()
-        except (OSError, ValueError):
-            token = ""
-    if token:
-        print("Токен загружен из Windows.")
-        return token
-
-    token = getpass.getpass("Один раз вставьте THEEND_AGENT_TOKEN из Render (ввод скрыт): ").strip()
-    if not token:
-        raise SystemExit("Токен пустой. Запустите агента снова.")
-
-    if sys.platform == "win32":
-        try:
-            import winreg
-            with winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE
-            ) as key:
-                winreg.SetValueEx(key, "THEEND_AGENT_TOKEN", 0, winreg.REG_SZ, token)
-            os.environ["THEEND_AGENT_TOKEN"] = token
-            print("Токен сохранён в Windows. В следующий раз вводить его не нужно.")
-        except OSError as error:
-            print("Не удалось сохранить токен автоматически:", error)
-    return token
-
-
-TOKEN = None
-
-
-
-# Optional OCR engine. Install with: py -m pip install pytesseract pillow
 try:
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageOps, ImageEnhance, ImageFilter
     import io
-    OCR_AVAILABLE = True
+    OCR=True
 except ImportError:
-    OCR_AVAILABLE = False
+    OCR=False
 
-if OCR_AVAILABLE:
-    for _candidate in (shutil.which("tesseract"), r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                       r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"):
-        if _candidate and os.path.isfile(_candidate):
-            pytesseract.pytesseract.tesseract_cmd = _candidate
+def token_value():
+    token=os.environ.get("THEEND_AGENT_TOKEN","").strip()
+    if not token and sys.platform=="win32":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,"Environment") as k:
+                token,_=winreg.QueryValueEx(k,"THEEND_AGENT_TOKEN")
+        except (OSError,ValueError): token=""
+    if not token: token=getpass.getpass("THEEND_AGENT_TOKEN (ввод скрыт): ").strip()
+    if not token: raise SystemExit("Не задан THEEND_AGENT_TOKEN.")
+    return token
+
+TOKEN=None
+
+def adb(*args,timeout=12,binary=False):
+    r=subprocess.run([ADB,"-s",SERIAL,*args],capture_output=True,timeout=timeout,check=True)
+    return r.stdout if binary else r.stdout.decode("utf-8","replace")
+
+def connected():
+    try:
+        r=subprocess.run([ADB,"devices"],capture_output=True,text=True,timeout=8,check=True)
+        return any(x.split()[:2]==[SERIAL,"device"] for x in r.stdout.splitlines()[1:])
+    except Exception: return False
+
+def api(path,data=None):
+    body=None if data is None else json.dumps(data).encode()
+    headers={"Authorization":"Bearer "+TOKEN}
+    if body is not None: headers["Content-Type"]="application/json"
+    req=urllib.request.Request(BASE_URL+path,data=body,headers=headers,method="POST" if body is not None else "GET")
+    try:
+        with urllib.request.urlopen(req,timeout=12) as r: return json.loads(r.read().decode() or "{}")
+    except urllib.error.HTTPError as e:
+        if e.code==401: raise RuntimeError("HTTP 401: токен не совпадает с THEEND_AGENT_TOKEN в Render.")
+        raise RuntimeError("HTTP "+str(e.code)+" при запросе "+path)
+
+def configure_ocr():
+    if not OCR: raise SystemExit("Установи OCR: py -m pip install pytesseract pillow")
+    candidates=[shutil.which("tesseract"),r"C:\Program Files\Tesseract-OCR\tesseract.exe",r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]
+    for p in candidates:
+        if p and (os.path.isfile(p) if os.path.isabs(p) else True):
+            pytesseract.pytesseract.tesseract_cmd=p
             break
 
+def screen_png():
+    # Screen pixels are read into memory only; no screenshot files or uploads are created.
+    b=adb("exec-out","screencap","-p",timeout=15,binary=True)
+    if not b.startswith(b"\x89PNG"): raise RuntimeError("Некорректный кадр экрана от ADB.")
+    return b
 
-def capture_screen_png():
-    """Capture emulator screen locally; never uploads it."""
-    result = subprocess.run([ADB, "-s", ADB_SERIAL, "exec-out", "screencap", "-p"],
-                            capture_output=True, timeout=15, check=True)
-    if not result.stdout.startswith(b"\x89PNG"):
-        raise RuntimeError("ADB вернул некорректный снимок экрана")
-    return result.stdout
-
-
-def ocr_game_screen(png_bytes):
-    if not OCR_AVAILABLE:
-        raise RuntimeError("OCR-библиотеки не установлены. Выполните: py -m pip install pytesseract pillow")
+def recognize(png):
+    im=Image.open(io.BytesIO(png)).convert("RGB")
+    scale=1.5 if im.width<1200 else 1.2
+    im=im.resize((int(im.width*scale),int(im.height*scale)))
+    im=ImageOps.grayscale(im)
+    im=ImageEnhance.Contrast(im).enhance(1.8).filter(ImageFilter.SHARPEN)
+    langs=[]
     try:
-        image_obj = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-        data = pytesseract.image_to_data(image_obj, lang="eng+rus", config="--psm 11",
-                                         output_type=pytesseract.Output.DICT)
-    except pytesseract.pytesseract.TesseractNotFoundError:
-        raise RuntimeError("Не найден Tesseract OCR. Установите Tesseract OCR для Windows.")
-    words = []
-    for i, raw in enumerate(data.get("text", [])):
-        label = re.sub(r"\s+", " ", raw).strip()
-        try:
-            confidence = float(data["conf"][i])
-            x, y = int(data["left"][i]), int(data["top"][i])
-            w, h = int(data["width"][i]), int(data["height"][i])
-        except (ValueError, TypeError, KeyError):
-            continue
-        if label and confidence >= 65 and w > 0 and h > 0:
-            words.append((label, x + w // 2, y + h // 2, confidence))
-    return words
+        available=pytesseract.get_languages(config="")
+        if "eng" in available and "rus" in available: langs.append("eng+rus")
+        if "eng" in available: langs.append("eng")
+        if "rus" in available: langs.append("rus")
+    except Exception: langs=["eng"]
+    if not langs: langs=["eng"]
+    best=[]
+    for lang in langs:
+        for psm in (11,6):
+            try:
+                d=pytesseract.image_to_data(im,lang=lang,config=f"--oem 3 --psm {psm}",output_type=pytesseract.Output.DICT)
+                words=[]
+                for i,t in enumerate(d.get("text",[])):
+                    t=re.sub(r"\s+"," ",t).strip()
+                    try:
+                        conf=float(d["conf"][i]); x=int(d["left"][i]); y=int(d["top"][i]); w=int(d["width"][i]); h=int(d["height"][i])
+                    except (ValueError,TypeError,KeyError): continue
+                    if t and conf>=65 and w>0 and h>0:
+                        words.append({"text":t,"x":round((x+w/2)/scale),"y":round((y+h/2)/scale),"w":round(w/scale),"h":round(h/scale),"conf":conf})
+                if sum(z["conf"] for z in words)>sum(z["conf"] for z in best): best=words
+            except pytesseract.pytesseract.TesseractNotFoundError:
+                raise RuntimeError("Tesseract OCR не найден. Установи его и перезапусти PowerShell.")
+            except Exception: pass
+    return best
 
+def norm(s):
+    return re.sub(r"[^a-zа-я0-9 ]+"," ",s.casefold().replace("ё","е")).strip()
 
-def find_ocr_collection_action(words):
-    allowed = {"collect", "collect all", "claim", "claim all", "gather", "collect reward", "claim reward",
-               "собрать", "собрать всё", "собрать все", "получить", "забрать", "забрать всё",
-               "забрать все", "получить награду", "забрать награду", "получить всё", "получить все"}
-    for label, x, y, confidence in words:
-        normalized = re.sub(r"\\s+", " ", label.casefold()).strip(" .,:;!?")
-        if normalized in allowed:
-            return label, x, y, confidence
+SAFE={"collect","collect all","claim","claim all","gather","collect reward","claim reward",
+      "собрать","собрать все","получить","забрать","забрать все","получить награду","забрать награду","собрать награду"}
+
+def find_collection(words):
+    # Require exact, high-confidence button wording. Never infer a button from resource counters.
+    for w in words:
+        if norm(w["text"]) in SAFE and w["conf"]>=82:
+            return w
+    ordered=sorted(words,key=lambda z:(z["y"],z["x"]))
+    for i,a in enumerate(ordered):
+        for b in ordered[i+1:i+4]:
+            if abs(a["y"]-b["y"])<=max(a["h"],b["h"],12)*0.6:
+                phrase=norm(a["text"]+" "+b["text"])
+                if phrase in SAFE and min(a["conf"],b["conf"])>=85:
+                    return {"text":a["text"]+" "+b["text"],"x":round((a["x"]+b["x"])/2),"y":round((a["y"]+b["y"])/2),"conf":min(a["conf"],b["conf"])}
     return None
 
+def tap(x,y):
+    s=adb("shell","wm","size")
+    m=re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)",s)
+    if not m: raise RuntimeError("Не удалось определить размер экрана.")
+    width,height=map(int,m.groups())
+    if not (0<=x<width and 0<=y<height): raise ValueError("Координаты вне экрана.")
+    adb("shell","input","tap",str(x),str(y))
 
+def heartbeat(is_connected):
+    api("/api/agent/heartbeat",{"deviceName":DEVICE,"emulatorConnected":is_connected})
 
-def adb(*args, timeout=8):
-    return subprocess.run(
-        [ADB, "-s", ADB_SERIAL, *args],
-        capture_output=True, text=True, timeout=timeout, check=True
-    )
-
-
-def emulator_connected():
+def run_queued_command():
     try:
-        result = subprocess.run(
-            [ADB, "devices"], capture_output=True, text=True, timeout=8, check=True
-        )
-        for line in result.stdout.splitlines()[1:]:
-            fields = line.split()
-            if len(fields) >= 2 and fields[0] == ADB_SERIAL and fields[1] == "device":
-                return True
-        return False
-    except (FileNotFoundError, subprocess.SubprocessError):
-        return False
-
-
-def request_json(path, data=None):
-    payload = None if data is None else json.dumps(data).encode("utf-8")
-    headers = {"Authorization": "Bearer " + TOKEN}
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(
-        BASE_URL + path,
-        data=payload,
-        headers=headers,
-        method="POST" if payload is not None else "GET",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=12) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body or "{}")
-    except urllib.error.HTTPError as error:
-        if error.code == 401:
-            raise RuntimeError(
-                "HTTP 401: токен не совпадает с THEEND_AGENT_TOKEN в Render. "
-                "Скопируйте значение из Render → Environment и запустите агента снова."
-            ) from None
-        raise RuntimeError(f"HTTP {error.code} при запросе {path}") from None
-
-
-def heartbeat(connected):
-    return request_json(
-        "/api/agent/heartbeat",
-        {"deviceName": DEVICE_NAME, "emulatorConnected": connected},
-    )
-
-
-def upload_screenshot():
-    result = subprocess.run(
-        [ADB, "-s", ADB_SERIAL, "exec-out", "screencap", "-p"],
-        capture_output=True, timeout=12, check=True
-    )
-    encoded = base64.b64encode(result.stdout).decode("ascii")
-    request_json("/api/agent/screenshot", {"image": encoded})
-    print(time.strftime("%H:%M:%S"), "Снимок экрана отправлен в TheEnd.")
-
-
-
-def read_game_ui():
-    """Read Android accessibility hierarchy; screenshots stay local."""
-    adb("shell", "uiautomator", "dump", "/sdcard/theend_window.xml", timeout=20)
-    xml_text = adb("shell", "cat", "/sdcard/theend_window.xml", timeout=10).stdout
-    try:
-        root = ET.fromstring(xml_text)
-    except ET.ParseError:
-        return []
-    nodes = []
-    for node in root.iter("node"):
-        label = (node.attrib.get("text") or node.attrib.get("content-desc") or "").strip()
-        bounds = node.attrib.get("bounds", "")
-        match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
-        if label and match:
-            x1, y1, x2, y2 = map(int, match.groups())
-            if x2 > x1 and y2 > y1:
-                nodes.append((label, (x1 + x2) // 2, (y1 + y2) // 2))
-    return nodes
-
-
-def find_safe_game_action(nodes):
-    """Activate only clearly labeled resource/reward collection controls."""
-    allowed = {
-        "collect", "collect all", "claim", "claim all", "gather",
-        "собрать", "собрать всё", "собрать все", "получить", "забрать",
-        "забрать всё", "забрать все", "получить награду", "забрать награду"
-    }
-    for label, x, y in nodes:
-        normalized = re.sub(r"\s+", " ", label.casefold()).strip()
-        if normalized in allowed:
-            return label, x, y
-    return None
-
-
-def run_one_command():
-    try:
-        response = request_json("/api/agent/commands/next")
-        command = response.get("command")
-        if not command:
-            return
-        command_id = command.get("id")
-        success = False
+        c=api("/api/agent/commands/next").get("command")
+        if not c: return
+        ok=False
         try:
-            if command.get("type") != "tap":
-                raise ValueError("Неподдерживаемая команда")
-            size_text = adb("shell", "wm", "size").stdout
-            match = re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)", size_text)
-            if not match:
-                raise RuntimeError("Не удалось определить размер экрана эмулятора")
-            width, height = int(match.group(1)), int(match.group(2))
-            # Scale calibrated base coordinates to actual emulator resolution.
-            x = round(int(command["x"]) * width / 605)
-            y = round(int(command["y"]) * height / 1070)
-            if not (0 <= x < width and 0 <= y < height):
-                raise ValueError("Координаты касания за пределами экрана")
-            adb("shell", "input", "tap", str(x), str(y))
-            success = True
-            print(time.strftime("%H:%M:%S"), "Касание выполнено:", x, y)
-        except Exception as error:
-            print("Ошибка выполнения команды:", error)
-        request_json("/api/agent/commands/" + str(command_id) + "/result", {"ok": success})
-        # Let the game react before the next queued tap.
-        time.sleep(1.5)
-    except Exception as error:
-        print("Ошибка командного сервиса:", error)
-
+            if c.get("type")!="tap": raise ValueError("Неподдерживаемая команда.")
+            s=adb("shell","wm","size"); m=re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)",s)
+            if not m: raise RuntimeError("Размер экрана не определён.")
+            w,h=map(int,m.groups()); x=round(int(c["x"])*w/605); y=round(int(c["y"])*h/1070)
+            tap(x,y); ok=True
+            print(time.strftime("%H:%M:%S"),"Команда сайта выполнена.")
+        except Exception as e: print("Команда не выполнена:",e)
+        api("/api/agent/commands/"+str(c["id"])+"/result",{"ok":ok})
+    except Exception as e: print("Очередь команд:",e)
 
 def main():
     global TOKEN
-    TOKEN = get_token()
-
-    if not shutil.which(ADB) and not os.path.isfile(ADB):
-        raise SystemExit(
-            "ADB не найден. Установите Android platform-tools или задайте THEEND_ADB "
-            "полным путём к adb.exe."
-        )
-
-    print("TheEnd Agent запущен.")
-    print("Сервер:", BASE_URL)
-    print("Эмулятор:", ADB_SERIAL)
-    print("Не закрывайте это окно PowerShell.")
-
-    last_heartbeat = 0
-    last_ui_scan = 0
-    last_action_key = ""
-    last_action_at = 0
+    TOKEN=token_value(); configure_ocr()
+    if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\\platform-tools\\adb.exe")
+    print("TheEnd Agent v6 запущен.")
+    print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
+    print("Автораспознавание включено. Кадры обрабатываются в памяти: не сохраняются и не отправляются.")
+    last_beat=last_scan=0; last_key=None; last_action=0
     while True:
-        connected = emulator_connected()
-        now = time.time()
-        if now - last_heartbeat >= 15:
+        now=time.time(); online=connected()
+        if now-last_beat>=15:
             try:
-                heartbeat(connected)
-                print(
-                    time.strftime("%H:%M:%S"),
-                    "Эмулятор:",
-                    "подключён" if connected else "не найден",
-                )
-            except Exception as error:
-                print("Ошибка связи:", error)
-                if "HTTP 401" in str(error):
-                    raise SystemExit("Исправьте токен в Render и перезапустите агента.")
-            last_heartbeat = now
-
-        if connected:
-            if now - last_ui_scan >= 6:
+                heartbeat(online); print(time.strftime("%H:%M:%S"),"Эмулятор:","подключён" if online else "не найден")
+            except Exception as e:
+                print("Связь с сервером:",e)
+                if "401" in str(e): raise SystemExit("Исправь токен в Render и перезапусти агента.")
+            last_beat=now
+        if online:
+            if now-last_scan>=SCAN_SECONDS:
                 try:
-                    nodes = read_game_ui()
-                    action = find_safe_game_action(nodes)
+                    words=recognize(screen_png())
+                    action=find_collection(words)
                     if action:
-                        label, x, y = action
-                        action_key = f"a11y:{label}:{x}:{y}"
-                        if action_key != last_action_key or now - last_action_at >= 45:
-                            adb("shell", "input", "tap", str(x), str(y))
-                            print(time.strftime("%H:%M:%S"), f"Автодействие (Android UI): {label} ({x},{y})")
-                            last_action_key, last_action_at = action_key, now
+                        key=(norm(action["text"]),action["x"],action["y"])
+                        if key!=last_key or now-last_action>=COOLDOWN:
+                            tap(action["x"],action["y"])
+                            print(time.strftime("%H:%M:%S"),"Сбор:",action["text"],f"({action['x']},{action['y']})")
+                            last_key=key; last_action=now
                     else:
-                        if nodes:
-                            labels = [label for label, _, _ in nodes[:5]]
-                            print(time.strftime("%H:%M:%S"), "Android UI:", " | ".join(labels))
-                        png = capture_screen_png()
-                        words = ocr_game_screen(png)
-                        ocr_action = find_ocr_collection_action(words)
-                        if ocr_action:
-                            label, x, y, confidence = ocr_action
-                            action_key = f"ocr:{label}:{x}:{y}"
-                            if action_key != last_action_key or now - last_action_at >= 45:
-                                adb("shell", "input", "tap", str(x), str(y))
-                                print(time.strftime("%H:%M:%S"), f"Автодействие (OCR {confidence:.0f}%): {label} ({x},{y})")
-                                last_action_key, last_action_at = action_key, now
-                        elif words:
-                            preview = [w[0] for w in words[:12]]
-                            print(time.strftime("%H:%M:%S"), f"OCR: распознано {len(words)} слов: " + " | ".join(preview))
-                        else:
-                            print(time.strftime("%H:%M:%S"), "OCR: текст на экране не распознан; снимок остаётся на компьютере.")
-                except Exception as error:
-                    print("Ошибка анализа игрового интерфейса:", error)
-                last_ui_scan = now
-            run_one_command()
+                        print(time.strftime("%H:%M:%S"),"Игра просканирована; кнопка сбора не найдена.")
+                except Exception as e: print("Ошибка распознавания:",e)
+                last_scan=now
+            run_queued_command()
         time.sleep(2)
 
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\\nTheEnd Agent остановлен.")
+if __name__=="__main__":
+    try: main()
+    except KeyboardInterrupt: print("\nTheEnd Agent остановлен.")
