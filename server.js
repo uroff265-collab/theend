@@ -122,7 +122,20 @@ app.post("/api/agent/test-tap", async (_req, res) => {
 
 app.get("/api/agent/commands/next", requireAgentToken, async (_req, res) => {
   try {
-    const result = await pool.query("UPDATE agent_commands SET status='processing' WHERE id=(SELECT id FROM agent_commands WHERE status='pending' ORDER BY id ASC FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id, command_type AS type, x, y");
+    const result = await pool.query(`
+      WITH next_command AS (
+        SELECT id FROM agent_commands
+        WHERE status='pending'
+        ORDER BY id ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE agent_commands AS commands
+      SET status='processing'
+      FROM next_command
+      WHERE commands.id=next_command.id
+      RETURNING commands.id, commands.command_type AS type, commands.x, commands.y
+    `);
     res.json({ command: result.rows[0] ? { ...result.rows[0], id:String(result.rows[0].id) } : null });
   } catch (error) {
     console.error("Could not fetch agent command:", error.message);
