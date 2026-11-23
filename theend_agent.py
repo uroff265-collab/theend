@@ -536,9 +536,9 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v10 запущен | build 2026-11-23-adaptive-hud-detection")
+    print("TheEnd Agent v11 запущен | build 2026-11-23-no-blind-background-taps")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
-    print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
+    print("Безопасный режим: отключены фоновые нажатия по предполагаемым пузырям ресурсов.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
         now=time.time(); online=connected()
@@ -563,18 +563,9 @@ def main():
                     known_screens=learn_screen()
                     if known_screens:
                         print(time.strftime("%H:%M:%S"),"Память игры:",known_screens,"изученных экранов")
-                    if activities.get("town_production") is True:
-                        png=screen_png()
-                        words=recognize(png)
-                        action=find_collection(png,words)
-                        if action:
-                            key=(norm(action["text"]),action["x"],action["y"])
-                            if key!=last_key or now-last_action>=COOLDOWN:
-                                tap(action["x"],action["y"])
-                                print(time.strftime("%H:%M:%S"),"Сбор:",action["text"],f"({action['x']},{action['y']})")
-                                last_key=key; last_action=now
-                        else:
-                            print(time.strftime("%H:%M:%S"),"Производство: пузырь сбора не найден.")
+                    # Safety: do not guess resource bubbles from circle geometry.
+                    # The former background scanner clicked unrelated HUD controls.
+                    # Production actions must use an explicit task with UI verification.
                     run_semantic_modules(activities)
                 except Exception as e: print("Ошибка игрового цикла:",e)
                 last_scan=now
