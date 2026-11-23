@@ -18,7 +18,7 @@ const pool = new Pool({
 });
 
 app.disable("x-powered-by");
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "5mb" }));
 
 let latestAgentScreenshot = null;
 
@@ -92,7 +92,7 @@ app.get("/api/agent/status", async (_req, res) => {
 
 app.post("/api/agent/screenshot", requireAgentToken, (req, res) => {
   const { image } = req.body || {};
-  if (typeof image !== "string" || image.length > 1800000 || !/^[A-Za-z0-9+/]+=*$/.test(image)) {
+  if (typeof image !== "string" || image.length > 4500000 || !/^[A-Za-z0-9+/]+=*$/.test(image)) {
     return res.status(400).json({ error:"Некорректный снимок экрана." });
   }
   latestAgentScreenshot = { image, capturedAt: new Date().toISOString() };
