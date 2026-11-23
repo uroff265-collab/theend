@@ -161,12 +161,14 @@ def find_collection(png, words):
     return max(candidates,key=lambda z:z["conf"])
 
 def tap(x,y):
+    global LAST_ACTION_EVENT
     s=adb("shell","wm","size")
     m=re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)",s)
     if not m: raise RuntimeError("Не удалось определить размер экрана.")
     width,height=map(int,m.groups())
     if not (0<=x<width and 0<=y<height): raise ValueError("Координаты вне экрана.")
     adb("shell","input","tap",str(x),str(y))
+    LAST_ACTION_EVENT={"x":int(x),"y":int(y),"at":int(time.time())}
 
 # Conservative semantic automation: only click a unique, clickable Android UI node
 # when the matching activity title and a safe action label are both visible.
@@ -283,8 +285,11 @@ def run_semantic_modules(activities):
     return outcomes
 
 GAME_MEMORY_PATH=os.path.join(os.path.dirname(os.path.abspath(__file__)),"theend_game_memory.json")
+LAST_SCREEN_SIGNATURE=None
+LAST_ACTION_EVENT=None
 
 def learn_screen():
+    global LAST_SCREEN_SIGNATURE,LAST_ACTION_EVENT
     # Persist only extracted UI labels and relative control positions, never image pixels.
     try:
         nodes=read_ui_nodes()
@@ -310,6 +315,13 @@ def learn_screen():
                             "clickable":n["clickable"],"enabled":n["enabled"]}
                            for n in nodes if n["clickable"]]
         screens[signature]=entry
+        if LAST_SCREEN_SIGNATURE and LAST_SCREEN_SIGNATURE!=signature and LAST_ACTION_EVENT:
+            transitions=memory.setdefault("transitions",[])
+            transitions.append({"from":LAST_SCREEN_SIGNATURE,"to":signature,
+                                "action":LAST_ACTION_EVENT,"at":int(time.time())})
+            memory["transitions"]=transitions[-1000:]
+        LAST_SCREEN_SIGNATURE=signature
+        LAST_ACTION_EVENT=None
         memory["updatedAt"]=int(time.time())
         # Keep the local knowledge base bounded.
         if len(screens)>300:
