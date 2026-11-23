@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TheEnd Agent v9: robust ADB screen sizing + OCR task automation."""
+"""TheEnd Agent v10: adaptive HUD detection + guarded OCR automation."""
 import getpass, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 
@@ -397,38 +397,53 @@ def swipe_up():
     adb("shell","input","swipe",str(round(w*.5)),str(round(h*.78)),
         str(round(w*.5)),str(round(h*.28)),"650")
 
+def detect_top_food_icon(png, words):
+    """Find the first resource counter in the top HUD and infer its adjacent icon."""
+    width,height=Image.open(io.BytesIO(png)).size
+    counters=[]
+    for word in words:
+        token=re.sub(r"[^0-9.,KMBkmb]","",word["text"])
+        if word["y"] < height*0.12 and any(ch.isdigit() for ch in token):
+            counters.append(word)
+    if not counters: return None
+    counters.sort(key=lambda z:z["x"])
+    first=counters[0]
+    x=int(first["x"]-max(first["w"]*0.95,width*0.035))
+    y=int(first["y"])
+    if not (0<=x<width and 0<=y<height*0.12): return None
+    return {"x":x,"y":y,"counter":first["text"],"confidence":first["conf"]}
+
 def collect_offline_production():
-    # The top food/grain counter opens the production/resource panel.
-    # Coordinates are based on the user's 900x1600 LDPlayer screen.
-    print(time.strftime("%H:%M:%S"),"Производство: открываю панель через значок зерна.")
-    # Screenshot provided by the user shows the wheat/food resource icon
-    # at approximately (63, 13) on a 900x1600 emulator frame.
-    scaled_tap(63,13)
+    """Use live HUD/OCR detection and refuse ambiguous taps."""
+    png=screen_png()
+    words=recognize(png)
+    anchor=detect_top_food_icon(png,words)
+    if not anchor:
+        return False,"Не смог определить значок ресурса на верхней панели. Ничего не нажимал."
+    print(time.strftime("%H:%M:%S"),"Производство: найден счётчик",anchor["counter"],"значок:",anchor["x"],anchor["y"])
+    tap(anchor["x"],anchor["y"])
     time.sleep(2.0)
-    print(time.strftime("%H:%M:%S"),"Производство: открыл значок пшеницы (верхняя панель).")
-    for page in range(7):
-        words=recognize(screen_png())
-        lines=ocr_lines(words)
+    for page in range(4):
+        lines=ocr_lines(recognize(screen_png()))
         joined=" | ".join(norm(x["text"]) for x in lines)
-        print(time.strftime("%H:%M:%S"),"Производство: экран панели",page+1,
-              "| распознанный текст:",joined[:500])
-        offline_context=any(k in joined for k in
-                            ("офлайн","offline","сбор продукции","производств","награда","продукц"))
-        claims=[x for x in lines if any(k in norm(x["text"]) for k in
-                ("собрать","забрать","получить","claim","collect"))]
-        if claims and (offline_context or page>=1):
-            target=max(claims,key=lambda x:x["conf"])
-            print(time.strftime("%H:%M:%S"),"Производство: найдена кнопка",target["text"],
-                  "в точке",target["x"],target["y"])
-            scaled_tap(target["x"],target["y"])
+        print(time.strftime("%H:%M:%S"),"Производство: экран",page+1,"|",joined[:500])
+        context=any(k in joined for k in ("офлайн","offline","сбор продукции","производств","награда","продукц"))
+        claims=[x for x in lines if any(k in norm(x["text"]) for k in ("собрать","забрать","получить","claim","collect"))]
+        if context and len(claims)==1:
+            before=joined
+            target=claims[0]
+            tap(target["x"],target["y"])
             time.sleep(2.0)
             after=" | ".join(norm(x["text"]) for x in ocr_lines(recognize(screen_png())))
-            return True,"Нажата кнопка сбора: "+target["text"]+". После нажатия экран: "+after[:240]
-        if page<6:
-            swipe_up()
+            if after!=before: return True,"Нажата кнопка сбора; интерфейс изменился: "+after[:240]
+            return False,"Нажатие не подтвердилось изменением экрана. Повторно не нажимал."
+        if not context: return False,"Панель офлайн-продукции не подтверждена. Ничего не нажимал."
+        if page<3:
+            w,h=get_screen_size()
+            adb("shell","input","swipe",str(round(w*.5)),str(round(h*.78)),str(round(w*.5)),str(round(h*.38)),"550")
             time.sleep(1.0)
-    return False,"Не распознана кнопка сбора после открытия панели и 7 прокруток. Проверь журнал распознанного текста."
-    return False,"В панели не распознана кнопка сбора офлайн-награды. Ничего не нажимал."
+    return False,"Кнопка сбора не найдена однозначно. Ничего не нажимал."
+
 
 def interpret_task(instruction):
     text=norm(instruction)
@@ -521,7 +536,7 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v9 запущен | build 2026-11-23-adb-screen-size-fallback")
+    print("TheEnd Agent v10 запущен | build 2026-11-23-adaptive-hud-detection")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
