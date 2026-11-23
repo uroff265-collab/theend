@@ -127,6 +127,19 @@ h1 { margin:0 0 8px;font-size:29px; }
 .wide-field { grid-column:1/-1; }
 .setting-row { display:flex;justify-content:space-between;align-items:center;gap:15px;padding:15px 0;border-top:1px solid #252532; }
 .setting-row small { display:block;color:var(--muted);margin-top:5px;line-height:1.5; }
+
+.daily-toolbar { display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px; }
+.daily-toolbar .field { margin:0;min-width:190px;flex:1; }
+.daily-toolbar input,.daily-toolbar select { width:100%;padding:11px;border:1px solid #353447;border-radius:10px;background:#101018;color:white; }
+.daily-progress { height:9px;background:#29283a;border-radius:20px;overflow:hidden;margin:12px 0 5px; }
+.daily-progress span { display:block;height:100%;background:linear-gradient(90deg,#8d65e8,#66ddb0);border-radius:20px;transition:width .2s; }
+.daily-item { display:flex;align-items:center;gap:13px;padding:16px 2px;border-top:1px solid #252532; }
+.daily-item input { width:19px;height:19px;accent-color:var(--purple);flex-shrink:0; }
+.daily-item strong { display:block;font-size:14px; }
+.daily-item small { display:block;color:var(--muted);margin-top:5px;line-height:1.4; }
+.daily-item.done strong { color:#9291a8;text-decoration:line-through; }
+.daily-count { color:var(--green);font-size:12px;font-weight:bold;white-space:nowrap; }
+
 @media(max-width:700px) {
   .task-row { align-items:flex-start;flex-wrap:wrap; }
   .task-actions { width:100%;justify-content:flex-end; }
@@ -165,6 +178,7 @@ h1 { margin:0 0 8px;font-size:29px; }
   <button class="nav-btn active" data-page="home"><span class="nav-icon">⌂</span><span>Обзор</span></button>
   <button class="nav-btn" data-page="accounts"><span class="nav-icon">▣</span><span>Мои аккаунты</span></button>
   <button class="nav-btn" data-page="automation"><span class="nav-icon">⚙</span><span>Автоматизация</span></button>
+  <button class="nav-btn" data-page="lastasylum"><span class="nav-icon">♜</span><span>Last Asylum</span></button>
   <button class="nav-btn" data-page="schedule"><span class="nav-icon">◷</span><span>Расписание</span></button>
   <button class="nav-btn" data-page="history"><span class="nav-icon">▤</span><span>История задач</span></button>
 
@@ -262,6 +276,9 @@ h1 { margin:0 0 8px;font-size:29px; }
   const TASK_KEY = "theend_tasks_v1";
   const HISTORY_KEY = "theend_history_v1";
   const SETTINGS_KEY = "theend_settings_v1";
+  const LAST_ASYLUM_KEY = "theend_lastasylum_daily_v1";
+  let dailyDate = localDateString();
+  let dailyAccountKey = "";
   const LIMIT = 5;
   const TASK_LIMIT = 20;
   const taskModal = document.getElementById("taskModalBackdrop");
@@ -379,6 +396,85 @@ h1 { margin:0 0 8px;font-size:29px; }
       renderAutomation();
     });
   }
+  function localDateString(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+  const dailySteps = [
+    { id:"resources", icon:"📦", title:"Собрать накопленные ресурсы", detail:"Проверь хранилище и забери накопленные ресурсы." },
+    { id:"energy", icon:"⚡", title:"Проверить и потратить энергию", detail:"Посмотри запас энергии и используй её в доступных активностях." },
+    { id:"construction", icon:"🏗️", title:"Проверить строительство", detail:"Забери завершённые улучшения и поставь следующий объект." },
+    { id:"research", icon:"🔬", title:"Проверить исследования", detail:"Заверши готовое исследование и запусти следующее, если возможно." },
+    { id:"alliance", icon:"🤝", title:"Помочь альянсу", detail:"Проверь помощь союзникам и доступные задания альянса." }
+  ];
+  function readDailyChecks() {
+    try {
+      const value = JSON.parse(localStorage.getItem(LAST_ASYLUM_KEY) || "{}");
+      return value && typeof value === "object" ? value : {};
+    } catch { return {}; }
+  }
+  function renderLastAsylum() {
+    const accounts = readAccounts();
+    const accountOptions = accounts.map(a => {
+      const key = JSON.stringify([a.uid, a.server]);
+      return '<option value="' + esc(key) + '">' + esc(a.name) + ' · ' + esc(a.server) + '</option>';
+    }).join("");
+    if (dailyAccountKey && !accounts.some(a => JSON.stringify([a.uid, a.server]) === dailyAccountKey)) dailyAccountKey = "";
+    const scopeKey = dailyDate + "::" + (dailyAccountKey || "all");
+    const checks = readDailyChecks();
+    const done = checks[scopeKey] || {};
+    const completed = dailySteps.filter(step => done[step.id]).length;
+    main.innerHTML = `
+      ${topbar("Last Asylum")}
+      <h1>Last Asylum — ежедневная рутина</h1>
+      <p class="subtitle">Ежедневный чек-лист для контроля игровых действий. Отметки сохраняются отдельно по дате и игровому профилю в этом браузере.</p>
+      <section class="hero">
+        <span class="hero-tag">LAST ASYLUM · DAILY ROUTINE</span>
+        <h2>Пять основных проверок на день</h2>
+        <p>Отмечай пункты по мере выполнения. TheEnd пока фиксирует прогресс и историю, но не выполняет действия внутри игры автоматически.</p>
+        <div class="daily-progress"><span style="width:${Math.round(completed / dailySteps.length * 100)}%"></span></div>
+        <strong>${completed} из ${dailySteps.length} выполнено</strong>
+      </section>
+      <section class="card">
+        <div class="daily-toolbar">
+          <div class="field"><label for="dailyDate">Дата</label><input id="dailyDate" type="date" value="${esc(dailyDate)}"></div>
+          <div class="field"><label for="dailyAccount">Игровой профиль</label><select id="dailyAccount"><option value="">Общий список (без профиля)</option>${accountOptions}</select></div>
+          <button class="secondary" id="resetDaily">Сбросить отметки</button>
+        </div>
+        <div class="card-title"><h3>Список на сегодня</h3><span class="daily-count">${completed === dailySteps.length ? "День закрыт ✓" : "Выполнено " + completed + "/" + dailySteps.length}</span></div>
+        ${dailySteps.map(step => `
+          <label class="daily-item ${done[step.id] ? "done" : ""}">
+            <input type="checkbox" class="daily-check" data-step="${step.id}" ${done[step.id] ? "checked" : ""}>
+            <span style="font-size:22px">${step.icon}</span>
+            <span style="flex:1"><strong>${step.title}</strong><small>${step.detail}</small></span>
+            ${done[step.id] ? '<span class="daily-count">Готово</span>' : ""}
+          </label>`).join("")}
+      </section>
+      <div class="footer">THEEND · LAST ASYLUM · DAILY CHECKLIST</div>`;
+    document.getElementById("dailyAccount").value = dailyAccountKey;
+    document.getElementById("dailyDate").onchange = e => { dailyDate = e.target.value || localDateString(); renderLastAsylum(); };
+    document.getElementById("dailyAccount").onchange = e => { dailyAccountKey = e.target.value; renderLastAsylum(); };
+    document.querySelectorAll(".daily-check").forEach(input => input.onchange = () => {
+      const all = readDailyChecks();
+      const state = all[scopeKey] || {};
+      state[input.dataset.step] = input.checked;
+      all[scopeKey] = state;
+      localStorage.setItem(LAST_ASYLUM_KEY, JSON.stringify(all));
+      const step = dailySteps.find(item => item.id === input.dataset.step);
+      logAction(input.checked ? "Last Asylum: выполнено" : "Last Asylum: отметка снята", step ? step.title + " · " + dailyDate : dailyDate);
+      renderLastAsylum();
+    });
+    document.getElementById("resetDaily").onclick = () => {
+      if (!confirm("Сбросить все отметки для выбранной даты и профиля?")) return;
+      delete checks[scopeKey];
+      localStorage.setItem(LAST_ASYLUM_KEY, JSON.stringify(checks));
+      logAction("Last Asylum: чек-лист сброшен", dailyDate);
+      renderLastAsylum();
+    };
+  }
+
   function renderSchedule() {
     const tasks = readTasks().filter(t => t.enabled).sort((a,b) => String(a.scheduledAt).localeCompare(String(b.scheduledAt)));
     main.innerHTML = `
@@ -537,6 +633,7 @@ h1 { margin:0 0 8px;font-size:29px; }
     if (page === "home") renderHome();
     else if (page === "accounts") renderAccounts();
     else if (page === "automation") renderAutomation();
+    else if (page === "lastasylum") renderLastAsylum();
     else if (page === "schedule") renderSchedule();
     else if (page === "history") renderHistory();
     else if (page === "settings") renderSettings();
