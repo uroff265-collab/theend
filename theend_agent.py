@@ -171,6 +171,12 @@ def tap(x,y):
 def heartbeat(is_connected):
     api("/api/agent/heartbeat",{"deviceName":DEVICE,"emulatorConnected":is_connected})
 
+def get_agent_config():
+    data=api("/api/agent/config")
+    activities=data.get("activities") or {}
+    if not isinstance(activities,dict): activities={}
+    return activities
+
 def run_queued_command():
     try:
         c=api("/api/agent/commands/next").get("command")
@@ -194,7 +200,7 @@ def main():
     print("TheEnd Agent v7 запущен (поиск пузырей сбора по изображению + OCR числа).")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
-    last_beat=last_scan=last_command_poll=0; last_key=None; last_action=0
+    last_beat=last_scan=last_command_poll=last_config_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
         now=time.time(); online=connected()
         if now-last_beat>=15:
@@ -205,8 +211,20 @@ def main():
                 if "401" in str(e): raise SystemExit("Исправь токен в Render и перезапусти агента.")
             last_beat=now
         if online:
+            if now-last_config_poll>=30:
+                try:
+                    activities=get_agent_config()
+                    active_modules=tuple(k for k,v in activities.items() if v is True)
+                    print(time.strftime("%H:%M:%S"),"Настройки синхронизированы; включено модулей:",len(active_modules))
+                except Exception as e:
+                    print("Не удалось обновить настройки модулей:",e)
+                last_config_poll=now
             if now-last_scan>=SCAN_SECONDS:
                 try:
+                    if activities.get("town_production") is not True:
+                        last_scan=now
+                        time.sleep(2)
+                        continue
                     png=screen_png()
                     words=recognize(png)
                     action=find_collection(png,words)
