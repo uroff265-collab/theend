@@ -235,7 +235,10 @@ def main():
                             last_action_key = action_key
                             last_action_at = now
                     elif not nodes:
-                        print(time.strftime("%H:%M:%S"), "Игра не отдала текстовые элементы интерфейса; ожидаю.")
+                        print(time.strftime("%H:%M:%S"), "Сканирование: текстовых элементов не найдено. Возможно, интерфейс игры нарисован графически.")
+                    else:
+                        labels = [label for label, _, _ in nodes[:8]]
+                        print(time.strftime("%H:%M:%S"), f"Сканирование: найдено элементов {len(nodes)}; подписи: " + " | ".join(labels))
                 except Exception as error:
                     print("Ошибка анализа игрового интерфейса:", error)
                 last_ui_scan = now
