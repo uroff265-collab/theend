@@ -216,28 +216,63 @@ def read_ui_nodes():
     except Exception:
         return []
 
+def ocr_lines(words):
+    lines=[]
+    for word in sorted(words,key=lambda z:(z["y"],z["x"])):
+        row=next((v for v in lines if abs(v["y"]-word["y"])<=max(12,word["h"])),None)
+        if row is None:
+            row={"y":word["y"],"words":[]}; lines.append(row)
+        row["words"].append(word)
+    result=[]
+    for row in lines:
+        row["words"].sort(key=lambda z:z["x"])
+        result.append({"text":" ".join(w["text"] for w in row["words"]),
+                       "x":sum(w["x"] for w in row["words"])//len(row["words"]),
+                       "y":row["y"],
+                       "conf":sum(w["conf"] for w in row["words"])/len(row["words"])})
+    return result
+
+def find_semantic_ocr_target(activities):
+    try:
+        words=recognize(screen_png())
+    except Exception:
+        return None
+    lines=ocr_lines(words)
+    screen_text=" | ".join(norm(line["text"]) for line in lines)
+    for key,spec in SEMANTIC_MODULES.items():
+        if activities.get(key) is not True: continue
+        if not any(norm(ctx) in screen_text for ctx in spec["context"]): continue
+        candidates=[line for line in lines
+                    if any(norm(line["text"])==norm(action) for action in spec["actions"])
+                    and line["conf"]>=75]
+        if len(candidates)==1:
+            return key,spec,candidates[0]
+    return None
+
 def run_semantic_modules(activities):
     nodes=read_ui_nodes()
-    if not nodes: return
     visible=" ".join(n["label"] for n in nodes)
     for key,spec in SEMANTIC_MODULES.items():
         if activities.get(key) is not True: continue
-        if not any(norm(ctx) in visible for ctx in spec["context"]): continue
-        matches=[n for n in nodes if n["clickable"] and n["enabled"]
-                 and any(n["label"]==norm(action) for action in spec["actions"])]
-        # Ambiguous matches are deliberately skipped; no coordinate guessing.
-        if len(matches)!=1: continue
-        target=matches[0]
+        if nodes and any(norm(ctx) in visible for ctx in spec["context"]):
+            matches=[n for n in nodes if n["clickable"] and n["enabled"]
+                     and any(n["label"]==norm(action) for action in spec["actions"])]
+            if len(matches)!=1: continue
+            target=matches[0]; x,y=target["x"],target["y"]; label=target["label"]
+        else:
+            found=find_semantic_ocr_target({key:True})
+            if not found: continue
+            _,_,target=found; x,y=target["x"],target["y"]; label=target["text"]
         try:
-            tap(target["x"],target["y"])
-            print(time.strftime("%H:%M:%S"),"Модуль:",spec["label"],"— выполнено действие:",target["label"])
+            tap(x,y)
+            print(time.strftime("%H:%M:%S"),"Модуль:",spec["label"],"— действие:",label)
             time.sleep(1.5)
             after=read_ui_nodes()
             after_labels=" ".join(n["label"] for n in after)
-            if target["label"] not in after_labels:
+            if after and label not in after_labels:
                 print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"— элемент действия изменился/исчез.")
             else:
-                print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"— кнопка осталась; результат не подтверждён.")
+                print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"— результат требует подтверждения.")
         except Exception as e:
             print(time.strftime("%H:%M:%S"),"Модуль",spec["label"],"пропущен:",e)
 
