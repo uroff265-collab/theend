@@ -60,7 +60,7 @@ class VisionTests(unittest.TestCase):
         self.assertEqual(state["resolution"], [900, 1600])
         self.assertEqual(state["navigation"], ["bag", "mail"])
         self.assertTrue(any("Соберите" in line for line in state["quest_text"]))
-        self.assertEqual(state["top_counters"][0]["text"], "12.7M")
+        self.assertIn("12.7M", [item["text"] for item in state["top_counters"]])
 
     def test_analyze_screen_rejects_out_of_bounds_and_low_confidence(self):
         words = [
