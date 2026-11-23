@@ -370,11 +370,54 @@ def run_queued_command():
         api("/api/agent/commands/"+str(c["id"])+"/result",{"ok":ok})
     except Exception as e: print("Очередь команд:",e)
 
+def scaled_tap(x, y, ref_w=900, ref_h=1600):
+    s=adb("shell","wm","size")
+    m=re.search(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)",s)
+    if not m: raise RuntimeError("Размер экрана не определён.")
+    w,h=map(int,m.groups())
+    tap(round(x*w/ref_w),round(y*h/ref_h))
+
+def swipe_up():
+    s=adb("shell","wm","size")
+    m=re.search(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)",s)
+    if not m: raise RuntimeError("Размер экрана не определён.")
+    w,h=map(int,m.groups())
+    adb("shell","input","swipe",str(round(w*.5)),str(round(h*.78)),
+        str(round(w*.5)),str(round(h*.28)),"650")
+
+def collect_offline_production():
+    # The top food/grain counter opens the production/resource panel.
+    # Coordinates are based on the user's 900x1600 LDPlayer screen.
+    print(time.strftime("%H:%M:%S"),"Производство: открываю панель через значок зерна.")
+    scaled_tap(153,28)
+    time.sleep(1.5)
+    for page in range(5):
+        words=recognize(screen_png())
+        lines=ocr_lines(words)
+        joined=" | ".join(norm(x["text"]) for x in lines)
+        offline_context=any(k in joined for k in
+                            ("офлайн","offline","сбор продукции","производств","награда"))
+        claims=[x for x in lines if any(k in norm(x["text"]) for k in
+                ("собрать","забрать","получить","claim","collect"))]
+        if offline_context and claims:
+            # Only tap a claim label when the offline/production context is visible.
+            target=max(claims,key=lambda x:x["conf"])
+            scaled_tap(target["x"],target["y"])
+            time.sleep(1.5)
+            after=" | ".join(norm(x["text"]) for x in ocr_lines(recognize(screen_png())))
+            if any(k in after for k in ("собрано","получено","награда получена")):
+                return True,"Нажата кнопка сбора офлайн-награды; экран показал подтверждение."
+            return True,"Кнопка сбора офлайн-награды нажата; подтверждение результата не распознано."
+        if page<4:
+            swipe_up()
+            time.sleep(0.8)
+    return False,"В панели не распознана кнопка сбора офлайн-награды. Ничего не нажимал."
+
 def interpret_task(instruction):
     text=norm(instruction)
     selected=[]
-    if any(x in text for x in ("ресурс","ресурсы","производств","собери город","collect resources","gather resources")):
-        selected.append("town_production")
+    if any(x in text for x in ("офлайн","offline","сбор продукции","награда","значок зерна","собери ресурсы","ресурс","ресурсы","производств","собери город","collect resources","gather resources")):
+        selected.append("offline_production")
     intents={
         "exploration_camp":("лагер","развед","exploration camp"),
         "sanctuary":("святилищ","sanctuary"),
@@ -392,7 +435,14 @@ def execute_task(instruction, activities):
     completed=[]
     pending=[]
     for key in selected:
-        if key=="town_production":
+        if key=="offline_production":
+            try:
+                ok,message=collect_offline_production()
+                if ok: completed.append(message)
+                else: pending.append(message)
+            except Exception as e:
+                pending.append("ошибка сбора офлайн-продукции: "+str(e)[:180])
+        elif key=="town_production":
             try:
                 collected=0
                 seen=set()
