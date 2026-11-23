@@ -405,6 +405,13 @@ h1 { margin:0 0 8px;font-size:29px; }
         <div class="card-title"><h3>Подключение игрового бота</h3><span class="badge demo" id="agentBadge">Проверка…</span></div>
         <p id="agentStatusText" class="subtitle" style="margin:0">Проверяю подключение Android-агента.</p>
       </section>
+      <section class="card" style="margin-bottom:16px">
+        <div class="card-title"><h3>Задание для игрового ИИ</h3><span class="badge demo">AI TASK</span></div>
+        <p class="subtitle" style="margin:0 0 12px">Опиши результат, которого хочешь добиться. Агент получит задачу и сообщит о результате или о том, чего ему не хватает.</p>
+        <textarea id="aiTaskInstruction" rows="3" maxlength="500" placeholder="Например: собери доступные ресурсы в городе и забери награды лагеря…" style="width:100%;resize:vertical;padding:13px;border:1px solid #353447;border-radius:10px;background:#101018;color:white;font:inherit;margin-bottom:10px"></textarea>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="primary" id="sendAiTask">Поставить задачу</button><span id="aiTaskFeedback" class="task-meta">Задачи выполняются локальным Android-агентом.</span></div>
+        <div id="aiTaskList" class="task-list" style="margin-top:14px"><p class="task-meta">Загружаю задачи…</p></div>
+      </section>
       <section class="card">
         <div class="card-title"><h3>Игровые функции</h3><span class="badge demo">15 МОДУЛЕЙ</span></div>
         <p class="subtitle" style="margin:0 0 16px">Включай нужные функции. Настройки сохраняются на сервере и синхронизируются с агентом.</p>
@@ -444,6 +451,34 @@ h1 { margin:0 0 8px;font-size:29px; }
       if (currentPage === "automation") updateAgentStatus();
       else clearInterval(agentStatusTimer);
     }, 15000);
+    async function refreshAiTasks() {
+      const host=document.getElementById("aiTaskList");
+      if(!host) return;
+      try {
+        const response=await fetch("/api/agent/tasks");
+        const items=await response.json();
+        if(!response.ok) throw new Error(items.error || "Ошибка загрузки задач");
+        const labels={queued:"В ОЧЕРЕДИ",running:"ВЫПОЛНЯЕТСЯ",completed:"ВЫПОЛНЕНО",needs_input:"НУЖНО УТОЧНЕНИЕ",failed:"ОШИБКА"};
+        host.innerHTML=items.length?items.map(item=>'<div class="task-row"><span class="task-dot '+(item.status==="completed"?"":item.status==="failed"?"off":"")+'"></span><div class="task-main"><strong>'+esc(item.instruction)+'</strong><small>'+esc(labels[item.status]||item.status)+' · '+esc(new Date(item.createdAt).toLocaleString())+'</small>'+(item.result?'<div class="task-meta">'+esc(item.result)+'</div>':'')+'</div></div>').join(""):'<div class="empty"><strong>Задач пока нет</strong><p>Напиши ИИ, что нужно сделать в игре.</p></div>';
+      } catch(error) { host.innerHTML='<p class="task-meta">'+esc(error.message||"Не удалось загрузить задачи.")+'</p>'; }
+    }
+    document.getElementById("sendAiTask").onclick=async()=>{
+      const input=document.getElementById("aiTaskInstruction"), button=document.getElementById("sendAiTask"), feedback=document.getElementById("aiTaskFeedback");
+      const instruction=input.value.trim();
+      if(!instruction){feedback.textContent="Сначала напиши задачу.";return;}
+      button.disabled=true; feedback.textContent="Отправляю задачу агенту…";
+      try{
+        const response=await fetch("/api/agent/tasks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({instruction})});
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.error||"Не удалось поставить задачу");
+        input.value=""; feedback.textContent="Задача добавлена в очередь.";
+        logAction("Задача отправлена игровому ИИ",instruction);
+        await refreshAiTasks();
+      }catch(error){feedback.textContent=error.message||"Ошибка отправки.";}
+      finally{button.disabled=false;}
+    };
+    refreshAiTasks();
+    const aiTaskTimer=setInterval(()=>{if(currentPage==="automation")refreshAiTasks();else clearInterval(aiTaskTimer);},5000);
     const activityCatalog = [
       ["town_production","Производство города","Зерно, древесина, травы, антидот"],
       ["exploration_camp","Лагерь разведки","Накопленные награды лагеря"],
