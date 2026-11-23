@@ -60,6 +60,76 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+app.get("/api/accounts", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, name, uid, server, status FROM accounts ORDER BY created_at ASC, id ASC"
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Could not load accounts:", error.message);
+    res.status(500).json({ error: "Не удалось загрузить аккаунты." });
+  }
+});
+
+app.post("/api/accounts", async (req, res) => {
+  const { name, uid, server, status = "Демо" } = req.body || {};
+  if (typeof name !== "string" || typeof uid !== "string" || typeof server !== "string" ||
+      !name.trim() || !uid.trim() || !server.trim() ||
+      name.length > 50 || uid.length > 80 || server.length > 50 ||
+      !["Демо", "Активен", "Неактивен"].includes(status)) {
+    return res.status(400).json({ error: "Проверь ник, UID, сервер и статус профиля." });
+  }
+  try {
+    const result = await pool.query(
+      "INSERT INTO accounts (name, uid, server, status) VALUES ($1, $2, $3, $4) RETURNING id, name, uid, server, status",
+      [name.trim(), uid.trim(), server.trim(), status]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("Could not create account:", error.message);
+    res.status(500).json({ error: "Не удалось создать аккаунт." });
+  }
+});
+
+app.put("/api/accounts/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const { name, uid, server, status } = req.body || {};
+  if (!Number.isSafeInteger(id) || id < 1 ||
+      typeof name !== "string" || typeof uid !== "string" || typeof server !== "string" ||
+      !name.trim() || !uid.trim() || !server.trim() ||
+      name.length > 50 || uid.length > 80 || server.length > 50 ||
+      !["Демо", "Активен", "Неактивен"].includes(status)) {
+    return res.status(400).json({ error: "Проверь данные профиля." });
+  }
+  try {
+    const result = await pool.query(
+      "UPDATE accounts SET name=$1, uid=$2, server=$3, status=$4 WHERE id=$5 RETURNING id, name, uid, server, status",
+      [name.trim(), uid.trim(), server.trim(), status, id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Аккаунт не найден." });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Could not update account:", error.message);
+    res.status(500).json({ error: "Не удалось обновить аккаунт." });
+  }
+});
+
+app.delete("/api/accounts/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    return res.status(400).json({ error: "Некорректный ID аккаунта." });
+  }
+  try {
+    const result = await pool.query("DELETE FROM accounts WHERE id=$1 RETURNING id", [id]);
+    if (!result.rowCount) return res.status(404).json({ error: "Аккаунт не найден." });
+    res.json({ ok: true, deleted: id });
+  } catch (error) {
+    console.error("Could not delete account:", error.message);
+    res.status(500).json({ error: "Не удалось удалить аккаунт." });
+  }
+});
+
 app.get("/", (_req, res) => {
   res.sendFile(require("path").join(__dirname, "index.html"));
 });
