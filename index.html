@@ -369,6 +369,14 @@ h1 { margin:0 0 8px;font-size:29px; }
         <p id="agentStatusText" class="subtitle" style="margin:0">Агент анализирует доступные элементы интерфейса Android и выполняет разрешённые игровые действия автоматически.</p>
       </section>
       <section class="card" style="margin-bottom:16px">
+        <div class="card-title"><h3>Игровые модули</h3><span class="badge demo">НАСТРОЙКИ</span></div>
+        <p class="subtitle" style="margin:0 0 14px">Включи только нужные активности. Настройки сохраняются в Neon и доступны агенту. Модули, для которых ещё не реализовано распознавание и выполнение, останутся в статусе «ожидает реализации» и не будут выполнять нажатия.</p>
+        <div class="task-list" id="activitySettings">
+          <p class="task-meta">Загружаю настройки…</p>
+        </div>
+        <p id="activitySettingsResult" class="task-meta" style="margin:12px 0 0">Настройки синхронизируются с сервером.</p>
+      </section>
+      <section class="card" style="margin-bottom:16px">
         <div class="card-title"><h3>Сбор ресурсов</h3><span class="badge demo">ЛОКАЛЬНЫЙ АНАЛИЗ</span></div>
         <p class="subtitle" style="margin:0 0 14px">Запускает проверку статуса. Агент сканирует экран каждые 5 секунд; кадры не сохраняются и не отправляются.</p>
         <button class="primary" id="collectResources">Проверить экран</button>
@@ -434,6 +442,58 @@ h1 { margin:0 0 8px;font-size:29px; }
         result.textContent=error.message || "Ошибка запуска сбора.";
       } finally { button.disabled=false; }
     };
+    const activityCatalog = [
+      ["town_production","Производство города","Зерно, древесина, травы, антидот"],
+      ["exploration_camp","Лагерь разведки","Накопленные награды лагеря"],
+      ["sanctuary","Святилище","Медь и предметы палат"],
+      ["heal_wounded","Лечение раненых","Партии лечения и помощь альянса"],
+      ["alliance_help","Помощь альянсу","Запросы строительства, исследований и лечения"],
+      ["alliance_tech","Технологии альянса","Пожертвования в технологии"],
+      ["rallies","Штурмы","Вступление с ограничением потерь"],
+      ["excavations","Раскопки","Участие и получение наград"],
+      ["caravans","Караваны","Поиск и фильтрация; подтверждение атаки вручную"],
+      ["black_ops","Тайные задания","Поиск целей, фильтры и помощь"],
+      ["golden_eggs","Золотые яйца","Сбор доступных наград"],
+      ["town_shield","Щит города","Защита при обнаружении угрозы"],
+      ["cheese_thief","Сырный вор","Штурмы с лимитом потерь"],
+      ["survival_battle","Битва за выживание","Планы фаз и лимиты расхода"],
+      ["scouting","Разведка карты","Поиск ресурсных точек"]
+    ];
+    async function loadActivitySettings() {
+      const host=document.getElementById("activitySettings");
+      const result=document.getElementById("activitySettingsResult");
+      if(!host) return;
+      try {
+        const response=await fetch("/api/automation/settings");
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.error || "Не удалось загрузить настройки");
+        const settings=data.activities || {};
+        host.innerHTML=activityCatalog.map(([key,title,description]) =>
+          '<div class="task-row"><div class="task-main"><strong>'+esc(title)+'</strong><small>'+esc(description)+'</small></div><label class="switch"><input type="checkbox" class="activity-toggle" data-key="'+key+'" '+(settings[key]===true?'checked':'')+'> Вкл.</label></div>'
+        ).join("");
+        host.querySelectorAll(".activity-toggle").forEach(input => input.addEventListener("change", async () => {
+          input.disabled=true;
+          const activities={};
+          host.querySelectorAll(".activity-toggle").forEach(control => { activities[control.dataset.key]=control.checked; });
+          result.textContent="Сохраняю настройки…";
+          try {
+            const saved=await fetch("/api/automation/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({activities})});
+            const payload=await saved.json();
+            if(!saved.ok) throw new Error(payload.error || "Ошибка сохранения");
+            result.textContent="Настройки сохранены на сервере. Агент получит их при следующей синхронизации.";
+            logAction("Обновлены игровые модули",activityCatalog.filter(([key])=>activities[key]).map(([,name])=>name).join(", ") || "Все модули выключены");
+          } catch(error) {
+            input.checked=!input.checked;
+            result.textContent=error.message || "Не удалось сохранить настройки.";
+          } finally { input.disabled=false; }
+        }));
+        result.textContent="Настройки загружены из Neon · "+activityCatalog.filter(([key])=>settings[key]===true).length+" включено.";
+      } catch(error) {
+        host.innerHTML='<p class="task-meta">'+esc(error.message || "Не удалось загрузить настройки.")+'</p>';
+        result.textContent="Сервер настроек недоступен.";
+      }
+    }
+    loadActivitySettings();
     document.getElementById("addTask").onclick = () => openTaskModal();
     document.getElementById("addDailyPack").onclick = async () => {
       const current = readTasks();
