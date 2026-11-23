@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 import sys
+import xml.etree.ElementTree as ET
 
 BASE_URL = os.environ.get("THEEND_URL", "https://theend-1.onrender.com").strip().rstrip("/")
 ADB = os.environ.get("THEEND_ADB", r"C:\platform-tools\adb.exe" if os.name == "nt" else "adb").strip()
@@ -116,6 +117,41 @@ def upload_screenshot():
     print(time.strftime("%H:%M:%S"), "Снимок экрана отправлен в TheEnd.")
 
 
+
+def read_game_ui():
+    """Read Android accessibility hierarchy; screenshots stay local."""
+    adb("shell", "uiautomator", "dump", "/sdcard/theend_window.xml", timeout=20)
+    xml_text = adb("shell", "cat", "/sdcard/theend_window.xml", timeout=10).stdout
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    nodes = []
+    for node in root.iter("node"):
+        label = (node.attrib.get("text") or node.attrib.get("content-desc") or "").strip()
+        bounds = node.attrib.get("bounds", "")
+        match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+        if label and match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            if x2 > x1 and y2 > y1:
+                nodes.append((label, (x1 + x2) // 2, (y1 + y2) // 2))
+    return nodes
+
+
+def find_safe_game_action(nodes):
+    """Activate only clearly labeled resource/reward collection controls."""
+    allowed = {
+        "collect", "collect all", "claim", "claim all", "gather",
+        "собрать", "собрать всё", "собрать все", "получить", "забрать",
+        "забрать всё", "забрать все", "получить награду", "забрать награду"
+    }
+    for label, x, y in nodes:
+        normalized = re.sub(r"\s+", " ", label.casefold()).strip()
+        if normalized in allowed:
+            return label, x, y
+    return None
+
+
 def run_one_command():
     try:
         response = request_json("/api/agent/commands/next")
@@ -165,7 +201,9 @@ def main():
     print("Не закрывайте это окно PowerShell.")
 
     last_heartbeat = 0
-    last_screenshot = 0
+    last_ui_scan = 0
+    last_action_key = ""
+    last_action_at = 0
     while True:
         connected = emulator_connected()
         now = time.time()
@@ -184,12 +222,23 @@ def main():
             last_heartbeat = now
 
         if connected:
-            if now - last_screenshot >= 10:
+            if now - last_ui_scan >= 6:
                 try:
-                    upload_screenshot()
+                    nodes = read_game_ui()
+                    action = find_safe_game_action(nodes)
+                    if action:
+                        label, x, y = action
+                        action_key = f"{label}:{x}:{y}"
+                        if action_key != last_action_key or now - last_action_at >= 45:
+                            adb("shell", "input", "tap", str(x), str(y))
+                            print(time.strftime("%H:%M:%S"), f"Автодействие: {label} ({x},{y})")
+                            last_action_key = action_key
+                            last_action_at = now
+                    elif not nodes:
+                        print(time.strftime("%H:%M:%S"), "Игра не отдала текстовые элементы интерфейса; ожидаю.")
                 except Exception as error:
-                    print("Не удалось отправить снимок экрана:", error)
-                last_screenshot = now
+                    print("Ошибка анализа игрового интерфейса:", error)
+                last_ui_scan = now
             run_one_command()
         time.sleep(2)
 
