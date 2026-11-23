@@ -206,7 +206,8 @@ def main():
         if online:
             if now-last_scan>=SCAN_SECONDS:
                 try:
-                    words=recognize(screen_png())
+                    png=screen_png()
+                    words=recognize(png)
                     action=find_collection(png,words)
                     if action:
                         key=(norm(action["text"]),action["x"],action["y"])
