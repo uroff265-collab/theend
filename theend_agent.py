@@ -372,19 +372,14 @@ def get_agent_config():
     return activities
 
 def run_queued_command():
+    """Drain legacy dashboard tap commands without executing blind coordinates."""
     try:
         c=api("/api/agent/commands/next").get("command")
         if not c: return
-        ok=False
-        try:
-            if c.get("type")!="tap": raise ValueError("Неподдерживаемая команда.")
-            w,h=get_screen_size()
-            x=round(int(c["x"])*w/605); y=round(int(c["y"])*h/1070)
-            tap(x,y); ok=True
-            print(time.strftime("%H:%M:%S"),"Команда сайта выполнена.")
-        except Exception as e: print("Команда не выполнена:",e)
-        api("/api/agent/commands/"+str(c["id"])+"/result",{"ok":ok})
-    except Exception as e: print("Очередь команд:",e)
+        api("/api/agent/commands/"+str(c["id"])+"/result",{"ok":False})
+        print(time.strftime("%H:%M:%S"),"Старая команда координат отклонена: требуется распознанная игровая цель.")
+    except Exception as e:
+        print("Очередь команд:",e)
 
 def scaled_tap(x, y, ref_w=900, ref_h=1600):
     w,h=get_screen_size()
@@ -459,62 +454,34 @@ def interpret_task(instruction):
     return list(dict.fromkeys(selected))
 
 def execute_task(instruction, activities):
+    """Run only implemented, screen-confirmed accessibility actions.
+
+    OCR-only production taps are intentionally disabled: the game's Unity
+    canvas does not reliably expose those controls through Android UIAutomator.
+    """
     selected=interpret_task(instruction)
     if not selected:
-        return "needs_input","Пока не распознал задачу. Поддерживаемые команды: собрать ресурсы, забрать награды лагеря/святилища/золотых яиц, помочь альянсу."
+        return "needs_input","Задача не распознана. Доступны только модули с подтверждаемым экраном: лагерь разведки, святилище, помощь альянсу, золотые яйца."
     completed=[]
     pending=[]
     for key in selected:
         if key=="offline_production":
-            try:
-                ok,message=collect_offline_production()
-                if ok: completed.append(message)
-                else: pending.append(message)
-            except Exception as e:
-                pending.append("ошибка сбора офлайн-продукции: "+str(e)[:180])
-        elif key=="town_production":
-            try:
-                collected=0
-                seen=set()
-                for _ in range(12):
-                    png=screen_png()
-                    words=recognize(png)
-                    action=find_collection(png,words)
-                    if not action: break
-                    point=(action["x"],action["y"])
-                    if point in seen: break
-                    seen.add(point)
-                    tap(*point)
-                    time.sleep(1.0)
-                    after_png=screen_png()
-                    after_words=recognize(after_png)
-                    still_there=find_collection(after_png,after_words)
-                    # Continue if the target changed/disappeared; otherwise stop
-                    # to avoid repeatedly tapping the same unresponsive control.
-                    if still_there and (still_there["x"],still_there["y"])==point:
-                        pending.append("пузырь по координатам "+str(point)+" не исчез после нажатия")
-                        break
-                    collected+=1
-                if collected:
-                    completed.append("собрано пузырей производства: "+str(collected))
-                elif not pending:
-                    pending.append("зелёные пузыри сбора не найдены на текущем экране")
-            except Exception as e:
-                pending.append("ошибка анализа производства: "+str(e)[:180])
+            pending.append("Сбор производства пока отключён: распознавание верхней панели по OCR не подтверждает назначение кнопки. Нужна отдельная проверенная модель экрана.")
+            continue
+        if key not in SEMANTIC_MODULES:
+            pending.append(key+": модуль ещё не реализован.")
+            continue
+        outcome=run_semantic_modules({key:True})
+        item=next((x for x in outcome if x[0]==key),None)
+        if item and item[1] and item[2]=="ui_changed_result_unconfirmed":
+            pending.append(key+": интерфейс изменился, но получение награды сервером игры не подтверждено.")
+        elif item:
+            pending.append(key+": "+item[2])
         else:
-            outcomes=run_semantic_modules({key:True})
-            outcome=next((item for item in outcomes if item[0]==key),None)
-            if outcome and outcome[1]:
-                completed.append("выполнено действие модуля "+key+" (элемент интерфейса изменился)")
-            elif outcome:
-                pending.append(key+": "+outcome[2])
-            else:
-                pending.append(key+": действие не выполнено")
+            pending.append(key+": экран или безопасная кнопка не распознаны; действий не было.")
     if completed and not pending:
         return "completed","Выполнено: "+"; ".join(completed)+"."
-    if completed or pending:
-        return "needs_input","Частично обработано. "+"; ".join(completed+pending)+"."
-    return "needs_input","На текущем экране нет распознанной безопасной цели."
+    return "needs_input","Проверка завершена. "+"; ".join(pending)+"."
 
 def poll_game_task(activities):
     try:
@@ -534,9 +501,9 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v12 запущен | build 2026-11-23-accessibility-grounded-actions")
+    print("TheEnd Agent v13 запущен | build 2026-11-23-safe-task-dispatch")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
-    print("Распознавание: только подтверждённые кнопки Android UI; OCR-координаты не нажимаются.")
+    print("Безопасный режим: только контекстные кнопки Android UI; слепые координаты и OCR-сбор отключены.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
         now=time.time(); online=connected()
