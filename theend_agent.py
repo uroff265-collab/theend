@@ -221,21 +221,18 @@ def main():
                 last_config_poll=now
             if now-last_scan>=SCAN_SECONDS:
                 try:
-                    if activities.get("town_production") is not True:
-                        last_scan=now
-                        time.sleep(2)
-                        continue
-                    png=screen_png()
-                    words=recognize(png)
-                    action=find_collection(png,words)
-                    if action:
-                        key=(norm(action["text"]),action["x"],action["y"])
-                        if key!=last_key or now-last_action>=COOLDOWN:
-                            tap(action["x"],action["y"])
-                            print(time.strftime("%H:%M:%S"),"Сбор:",action["text"],f"({action['x']},{action['y']})")
-                            last_key=key; last_action=now
-                    else:
-                        print(time.strftime("%H:%M:%S"),"Игра просканирована; кнопка сбора не найдена.")
+                    if activities.get("town_production") is True:
+                        png=screen_png()
+                        words=recognize(png)
+                        action=find_collection(png,words)
+                        if action:
+                            key=(norm(action["text"]),action["x"],action["y"])
+                            if key!=last_key or now-last_action>=COOLDOWN:
+                                tap(action["x"],action["y"])
+                                print(time.strftime("%H:%M:%S"),"Сбор:",action["text"],f"({action['x']},{action['y']})")
+                                last_key=key; last_action=now
+                        else:
+                            print(time.strftime("%H:%M:%S"),"Игра просканирована; кнопка сбора не найдена.")
                 except Exception as e: print("Ошибка распознавания:",e)
                 last_scan=now
             if now-last_command_poll>=COMMAND_POLL_SECONDS:
