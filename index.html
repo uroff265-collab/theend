@@ -369,6 +369,12 @@ h1 { margin:0 0 8px;font-size:29px; }
         <p id="agentStatusText" class="subtitle" style="margin:0">Агент связывает TheEnd с Android-эмулятором на компьютере.</p>
       </section>
       <section class="card" style="margin-bottom:16px">
+        <div class="card-title"><h3>Сбор ресурсов</h3><span class="badge demo">ТЕСТОВЫЙ МАРШРУТ</span></div>
+        <p class="subtitle" style="margin:0 0 14px">Последовательно проверяет три ресурсные точки на твоей базе. Оставь игру на главном экране и не трогай эмулятор во время выполнения.</p>
+        <button class="primary" id="collectResources">Собрать ресурсы</button>
+        <p id="collectResourcesResult" class="task-meta" style="margin:12px 0 0">Ожидает запуска.</p>
+      </section>
+      <section class="card" style="margin-bottom:16px">
         <div class="card-title"><h3>Проверка управления</h3><span class="badge demo">ТЕСТ</span></div>
         <p class="subtitle" style="margin:0 0 14px">Отправляет одно касание в безопасную область игрового экрана (350, 1000). Игра должна быть открыта, агент — запущен на компьютере.</p>
         <button class="primary" id="agentTestTap">Отправить тестовое касание</button>
@@ -419,6 +425,21 @@ h1 { margin:0 0 8px;font-size:29px; }
       if (currentPage === "automation") updateAgentStatus();
       else clearInterval(agentStatusTimer);
     }, 15000);
+    document.getElementById("collectResources").onclick = async () => {
+      const button=document.getElementById("collectResources");
+      const result=document.getElementById("collectResourcesResult");
+      button.disabled=true;
+      result.textContent="Добавляю три ресурсные точки в очередь…";
+      try {
+        const response=await fetch("/api/agent/collect-resources",{method:"POST"});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok) throw new Error(data.error || "Не удалось запустить сбор.");
+        result.textContent="В очереди "+data.queued+" касания. Подожди около 10 секунд и проверь игру.";
+        logAction("Сбор ресурсов запущен","Три ресурсные точки · Android agent");
+      } catch(error) {
+        result.textContent=error.message || "Ошибка запуска сбора.";
+      } finally { button.disabled=false; }
+    };
     document.getElementById("agentTestTap").onclick = async () => {
       const button = document.getElementById("agentTestTap");
       const result = document.getElementById("agentCommandResult");
