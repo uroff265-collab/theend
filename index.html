@@ -136,7 +136,35 @@ h1 { margin:0 0 8px;font-size:29px; }
 .module-tag { display:inline-flex;align-items:center;border-radius:20px;padding:4px 7px;font-size:9px;letter-spacing:.4px;color:#d5c3ff;background:#33264c;border:1px solid #5b4380;white-space:nowrap; }
 .module-tag.planned { color:#c4c1d0;background:#252431;border-color:#3c394b; }
 .module-control { flex-shrink:0; }
-@media(max-width:700px) { .module-grid { grid-template-columns:1fr; } .module-tile { padding:12px; } }
+.module-grid { grid-template-columns:repeat(3,minmax(0,1fr));gap:12px; }
+.module-tile { min-height:154px;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:16px 17px 13px;background:#1c2525;border:1px solid #303b3b;border-radius:4px; }
+.module-tile:hover { background:#202b2b;border-color:#52605e; }
+.module-top { display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:23px; }
+.module-top strong { font-size:14px;line-height:1.3; }
+.module-status { align-self:flex-start;margin-top:12px;padding:4px 8px;border-radius:3px;background:#393323;color:#e8aa4c;font-size:10px;font-weight:bold;letter-spacing:.7px; }
+.module-status.off { background:#292f2f;color:#9aa3a0; }
+.module-description { color:#d6dcda;font-size:12px;line-height:1.4;margin-top:13px;min-height:17px; }
+.module-footer { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:12px; }
+.module-actions { display:flex;gap:6px;align-items:center; }
+.module-action { padding:6px 10px;border:1px solid #52605e;border-radius:3px;background:transparent;color:#dbe1df;font-size:12px;font-weight:bold; }
+.module-action.primary-action { background:#efb85f;border-color:#efb85f;color:#171717; }
+.module-grip { color:#87928f;font-size:18px;letter-spacing:1px; }
+.module-toggle { width:38px!important;height:21px!important;flex:0 0 38px!important;background:#394242!important;border:0!important; }
+.module-toggle::before { width:15px!important;height:15px!important;left:3px!important;top:3px!important;background:#171e1e!important; }
+.module-toggle:checked { background:#efb85f!important; }
+.module-toggle:checked::before { transform:translateX(17px)!important;background:#fff!important; }
+.module-modal-shade { position:fixed;inset:0;z-index:50;background:#000a;display:flex;align-items:center;justify-content:center;padding:16px; }
+.module-modal { width:min(560px,100%);background:#172020;border:1px solid #53605e;border-radius:4px;box-shadow:0 20px 70px #000b;color:#edf0ed; }
+.module-modal-head { display:flex;align-items:center;justify-content:space-between;padding:15px 17px;border-bottom:1px solid #354140;gap:12px; }
+.module-modal-head strong { font-size:17px; }
+.module-tabs { display:flex;border-bottom:1px solid #354140;padding:0 16px; }
+.module-tab { flex:1;padding:13px 8px;border:0;border-bottom:2px solid transparent;background:none;color:#9da8a5;font-weight:bold; }
+.module-tab.active { color:#f1bd69;border-color:#f1bd69; }
+.module-modal-body { padding:16px;min-height:210px;font-size:13px;line-height:1.6; }
+.module-modal-foot { padding:10px 16px 16px; }
+.module-modal-ok { width:100%;padding:11px;border:0;border-radius:3px;background:#efb85f;color:#171717;font-weight:bold; }
+@media(max-width:900px) { .module-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:700px) { .module-grid { grid-template-columns:1fr; } .module-tile { padding:14px; } }
 .task-dot { width:9px;height:9px;border-radius:50%;background:var(--green);flex-shrink:0; }
 .task-dot.off { background:#77778e; }
 .wide-field { grid-column:1/-1; }
@@ -474,6 +502,25 @@ h1 { margin:0 0 8px;font-size:29px; }
       ["survival_battle","Битва за выживание","Планы фаз и лимиты расхода"],
       ["scouting","Разведка карты","Поиск ресурсных точек"]
     ];
+    function openModuleDetails(item, enabled, openSettings=false) {
+      const [key,title,description]=item;
+      const implemented=key==="town_production";
+      const shade=document.createElement("div");
+      shade.className="module-modal-shade";
+      shade.innerHTML='<section class="module-modal" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="module-modal-head"><strong>'+esc(title)+'</strong><span class="module-status '+(enabled?'':'off')+'">'+(enabled?'НА ПАУЗЕ':'ВЫКЛЮЧЕНА')+'</span></header><nav class="module-tabs"><button class="module-tab '+(!openSettings?'active':'')+'" data-tab="now">Сейчас</button><button class="module-tab '+(openSettings?'active':'')+'" data-tab="settings">Настройки</button></nav><div class="module-modal-body" id="moduleModalBody"></div><footer class="module-modal-foot"><button class="module-modal-ok">OK</button></footer></section>';
+      document.body.appendChild(shade);
+      const body=shade.querySelector("#moduleModalBody");
+      const draw=tab=>{
+        shade.querySelectorAll(".module-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
+        if(tab==="now") body.innerHTML='<p><b>Статус:</b> '+(enabled?'На паузе — ожидает запуска агента':'Модуль выключен')+'</p><p><b>Описание:</b> '+esc(description)+'</p><p style="color:#aab5b1">'+(implemented?'Экспериментальное распознавание доступно локальному агенту. Реальное выполнение ещё требует проверки в игре.':'Модуль интерфейса подготовлен. Автоматическое выполнение этой активности пока не реализовано.')+'</p>';
+        else body.innerHTML='<p><b>Режим:</b> '+(enabled?'Включён в профиле автоматизации':'Выключен')+'</p><p><b>Синхронизация:</b> настройки сохраняются на сервере и передаются агенту.</p><p style="color:#aab5b1">Параметры самой игровой активности появятся после реализации и проверки её алгоритма.</p>';
+      };
+      shade.querySelectorAll(".module-tab").forEach(b=>b.addEventListener("click",()=>draw(b.dataset.tab)));
+      shade.querySelector(".module-modal-ok").onclick=()=>shade.remove();
+      shade.addEventListener("click",e=>{if(e.target===shade)shade.remove();});
+      document.addEventListener("keydown",function close(e){if(e.key==="Escape"){shade.remove();document.removeEventListener("keydown",close);}});
+      draw(openSettings?"settings":"now");
+    }
     async function loadActivitySettings() {
       const host=document.getElementById("activitySettings");
       const result=document.getElementById("activitySettingsResult");
@@ -484,14 +531,25 @@ h1 { margin:0 0 8px;font-size:29px; }
         if(!response.ok) throw new Error(data.error || "Не удалось загрузить настройки");
         const settings=data.activities || {};
         host.className="module-grid";
-        host.innerHTML=activityCatalog.map(([key,title,description],index) => {
+        host.innerHTML=activityCatalog.map(([key,title,description]) => {
           const implemented = key === "town_production";
-          return '<article class="module-tile"><div class="module-info"><div class="module-heading"><strong>'+esc(title)+'</strong><span class="module-tag '+(implemented?'':'planned')+'">'+(implemented?'ТЕСТОВЫЙ МОДУЛЬ':'СКОРО')+'</span></div><small>'+esc(description)+'</small></div><label class="switch module-control" title="'+(implemented?'Включить или выключить модуль':'Сохранить настройку модуля')+'"><input type="checkbox" role="switch" aria-label="'+esc(title)+'" class="activity-toggle" data-key="'+key+'" '+(settings[key]===true?'checked':'')+'><span>'+(settings[key]===true?'ВКЛ':'ВЫКЛ')+'</span></label></article>';
+          const enabled = settings[key]===true;
+          const state = enabled ? "НА ПАУЗЕ" : "ВЫКЛЮЧЕНА";
+          return '<article class="module-tile"><div class="module-top"><strong>'+esc(title)+'</strong><label class="switch module-control" title="Включить или выключить"><input type="checkbox" role="switch" aria-label="'+esc(title)+'" class="activity-toggle module-toggle" data-key="'+key+'" '+(enabled?'checked':'')+'></label></div><span class="module-status '+(enabled?'':'off')+'">'+state+'</span><div class="module-description">'+(enabled?'запустится вместе с ботом':esc(description))+'</div><div class="module-footer"><span class="module-grip">⠿</span><div class="module-actions"><button class="module-action" data-module-open="'+key+'">Подробнее</button><button class="module-action" data-module-settings="'+key+'" aria-label="Настройки">⚙</button></div></div></article>';
         }).join("");
         host.querySelectorAll(".activity-toggle").forEach(input => {
-          const label=input.closest(".switch").querySelector("span");
-          input.addEventListener("change",()=>{ if(label) label.textContent=input.checked?"ВКЛ":"ВЫКЛ"; });
+          input.addEventListener("change",()=> {
+            const tile=input.closest(".module-tile"), badge=tile.querySelector(".module-status"), desc=tile.querySelector(".module-description");
+            badge.textContent=input.checked?"НА ПАУЗЕ":"ВЫКЛЮЧЕНА";
+            badge.classList.toggle("off",!input.checked);
+            desc.textContent=input.checked?"запустится вместе с ботом":activityCatalog.find(([k])=>k===input.dataset.key)?.[2] || "";
+          });
         });
+        host.querySelectorAll("[data-module-open],[data-module-settings]").forEach(button => button.addEventListener("click",()=> {
+          const key=button.dataset.moduleOpen || button.dataset.moduleSettings;
+          const item=activityCatalog.find(([k])=>k===key);
+          if(item) openModuleDetails(item,settings[key]===true,button.hasAttribute("data-module-settings"));
+        }));
         host.querySelectorAll(".activity-toggle").forEach(input => input.addEventListener("change", async () => {
           input.disabled=true;
           const activities={};
