@@ -8,6 +8,7 @@ ADB=os.environ.get("THEEND_ADB",r"C:\platform-tools\adb.exe" if os.name=="nt" el
 SERIAL=os.environ.get("THEEND_ADB_SERIAL","127.0.0.1:5555").strip()
 DEVICE=os.environ.get("THEEND_DEVICE_NAME",platform.node() or "Android emulator")
 SCAN_SECONDS=5
+COMMAND_POLL_SECONDS=12
 COOLDOWN=35
 
 try:
@@ -36,7 +37,7 @@ def token_value():
 
 TOKEN=None
 
-def adb(*args,timeout=12,binary=False):
+def adb(*args,timeout=6,binary=False):
     r=subprocess.run([ADB,"-s",SERIAL,*args],capture_output=True,timeout=timeout,check=True)
     return r.stdout if binary else r.stdout.decode("utf-8","replace")
 
@@ -193,7 +194,7 @@ def main():
     print("TheEnd Agent v7 запущен (поиск пузырей сбора по изображению + OCR числа).")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
-    last_beat=last_scan=0; last_key=None; last_action=0
+    last_beat=last_scan=last_command_poll=0; last_key=None; last_action=0
     while True:
         now=time.time(); online=connected()
         if now-last_beat>=15:
@@ -219,7 +220,9 @@ def main():
                         print(time.strftime("%H:%M:%S"),"Игра просканирована; кнопка сбора не найдена.")
                 except Exception as e: print("Ошибка распознавания:",e)
                 last_scan=now
-            run_queued_command()
+            if now-last_command_poll>=COMMAND_POLL_SECONDS:
+                run_queued_command()
+                last_command_poll=now
         time.sleep(2)
 
 if __name__=="__main__":
