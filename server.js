@@ -1,5 +1,4 @@
 const express = require("express");
-const path = require("path");
 const { Pool } = require("pg");
 
 const app = express();
@@ -61,10 +60,8 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname)));
-
 app.get("/", (_req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.sendFile(require("path").join(__dirname, "index.html"));
 });
 
 async function start() {
