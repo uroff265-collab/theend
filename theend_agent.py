@@ -250,6 +250,7 @@ def find_semantic_ocr_target(activities):
     return None
 
 def run_semantic_modules(activities):
+    outcomes=[]
     nodes=read_ui_nodes()
     visible=" ".join(n["label"] for n in nodes)
     for key,spec in SEMANTIC_MODULES.items():
@@ -257,11 +258,15 @@ def run_semantic_modules(activities):
         if nodes and any(norm(ctx) in visible for ctx in spec["context"]):
             matches=[n for n in nodes if n["clickable"] and n["enabled"]
                      and any(n["label"]==norm(action) for action in spec["actions"])]
-            if len(matches)!=1: continue
+            if len(matches)!=1:
+                outcomes.append((key,False,"Не найдена единственная безопасная кнопка"))
+                continue
             target=matches[0]; x,y=target["x"],target["y"]; label=target["label"]
         else:
             found=find_semantic_ocr_target({key:True})
-            if not found: continue
+            if not found:
+                outcomes.append((key,False,"Нужный экран или кнопка не распознаны"))
+                continue
             _,_,target=found; x,y=target["x"],target["y"]; label=target["text"]
         try:
             tap(x,y)
@@ -269,12 +274,13 @@ def run_semantic_modules(activities):
             time.sleep(1.5)
             after=read_ui_nodes()
             after_labels=" ".join(n["label"] for n in after)
-            if after and label not in after_labels:
-                print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"— элемент действия изменился/исчез.")
-            else:
-                print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"— результат требует подтверждения.")
+            changed=bool(after and label not in after_labels)
+            outcomes.append((key,changed,"Элемент исчез/изменился" if changed else "Нажатие сделано, игровой результат пока не подтверждён"))
+            print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"—",outcomes[-1][2])
         except Exception as e:
+            outcomes.append((key,False,"Ошибка: "+str(e)[:180]))
             print(time.strftime("%H:%M:%S"),"Модуль",spec["label"],"пропущен:",e)
+    return outcomes
 
 GAME_MEMORY_PATH=os.path.join(os.path.dirname(os.path.abspath(__file__)),"theend_game_memory.json")
 
@@ -377,10 +383,14 @@ def execute_task(instruction, activities):
             except Exception as e:
                 pending.append("ошибка анализа производства: "+str(e)[:180])
         else:
-            run_semantic_modules({key:True})
-            # The semantic executor logs only verified candidate actions. If no action is visible,
-            # report that this screen needs learning rather than claim completion.
-            pending.append("модуль "+key+": проверка действия в журнале агента; требуется подтверждение игрового результата")
+            outcomes=run_semantic_modules({key:True})
+            outcome=next((item for item in outcomes if item[0]==key),None)
+            if outcome and outcome[1]:
+                completed.append("выполнено действие модуля "+key+" (элемент интерфейса изменился)")
+            elif outcome:
+                pending.append(key+": "+outcome[2])
+            else:
+                pending.append(key+": действие не выполнено")
     if completed and not pending:
         return "completed","Выполнено: "+"; ".join(completed)+"."
     if completed or pending:
