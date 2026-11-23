@@ -399,45 +399,19 @@ h1 { margin:0 0 8px;font-size:29px; }
     const accounts = readAccounts();
     main.innerHTML = `
       ${topbar("Автоматизация")}
-      <h1>Автоматизация</h1>
-      <p class="subtitle">Создавай задачи, связывай их с игровыми профилями и включай или отключай их.</p>
-      <section class="hero">
-        <span class="hero-tag">TASK MANAGER · DATABASE</span>
-        <h2>Управление задачами</h2>
-        <p>Задачи и расписание сохраняются на сервере в Neon. Агент анализирует экран локально. Доступно распознавание игровых элементов; действия без уверенного совпадения не выполняются.</p>
-        <div style="display:flex;gap:9px;flex-wrap:wrap"><button class="primary" id="addTask">＋ Создать задачу</button><button class="secondary" id="addDailyPack">Добавить ежедневный набор</button></div>
-      </section>
+      <h1>Автоматизация Last Asylum</h1>
+      <p class="subtitle">Управляй игровыми функциями и настройками бота в одном месте.</p>
       <section class="card" style="margin-bottom:16px">
-        <div class="card-title"><h3>Подключение Android-агента</h3><span class="badge demo" id="agentBadge">Проверка…</span></div>
-        <p id="agentStatusText" class="subtitle" style="margin:0">Агент анализирует доступные элементы интерфейса Android и выполняет разрешённые игровые действия автоматически.</p>
-      </section>
-      <section class="card" style="margin-bottom:16px">
-        <div class="card-title"><h3>Игровые модули</h3><span class="badge demo">НАСТРОЙКИ</span></div>
-        <p class="subtitle" style="margin:0 0 14px">Включи только нужные активности. Настройки сохраняются в Neon и доступны агенту. Модули, для которых ещё не реализовано распознавание и выполнение, останутся в статусе «ожидает реализации» и не будут выполнять нажатия.</p>
-        <div class="task-list" id="activitySettings">
-          <p class="task-meta">Загружаю настройки…</p>
-        </div>
-        <p id="activitySettingsResult" class="task-meta" style="margin:12px 0 0">Настройки синхронизируются с сервером.</p>
-      </section>
-      <section class="card" style="margin-bottom:16px">
-        <div class="card-title"><h3>Сбор ресурсов</h3><span class="badge demo">ЛОКАЛЬНЫЙ АНАЛИЗ</span></div>
-        <p class="subtitle" style="margin:0 0 14px">Запускает проверку статуса. Агент сканирует экран каждые 5 секунд; кадры не сохраняются и не отправляются.</p>
-        <button class="primary" id="collectResources">Проверить экран</button>
-        <p id="collectResourcesResult" class="task-meta" style="margin:12px 0 0">Ожидает запуска.</p>
-      </section>
-      <section class="stats">
-        <div class="stat"><div class="stat-label">Всего задач</div><div class="stat-value">${tasks.length} / ${TASK_LIMIT}</div><div class="stat-foot">Сохранено в Neon</div></div>
-        <div class="stat"><div class="stat-label">Включено</div><div class="stat-value">${tasks.filter(t => t.enabled).length}</div><div class="stat-foot">Готовы по расписанию</div></div>
-        <div class="stat"><div class="stat-label">Отключено</div><div class="stat-value">${tasks.filter(t => !t.enabled).length}</div><div class="stat-foot">Не отображаются в активном расписании</div></div>
+        <div class="card-title"><h3>Подключение игрового бота</h3><span class="badge demo" id="agentBadge">Проверка…</span></div>
+        <p id="agentStatusText" class="subtitle" style="margin:0">Проверяю подключение Android-агента.</p>
       </section>
       <section class="card">
-        <div class="card-title"><h3>Список задач</h3><span class="link">${tasks.length} / ${TASK_LIMIT}</span></div>
-        ${tasks.length ? '<div class="task-list">' + tasks.map(t => {
-          const account = t.accountId === null || t.accountId === "" || t.accountId === undefined ? null : accounts.find(a => String(a.id) === String(t.accountId));
-          return '<div class="task-row"><span class="task-dot ' + (t.enabled ? '' : 'off') + '"></span><div class="task-main"><strong>' + esc(t.title) + '</strong><small>' + esc(t.type) + ' · ' + esc(account ? account.name : 'Без профиля') + '</small><div class="task-meta">' + (t.recurrence === "daily" ? 'Каждый день · ' + esc((t.scheduledAt || '').slice(11,16)) : 'Один раз · ' + esc(formatDate(t.scheduledAt))) + '</div></div><div class="task-actions"><label class="switch"><input class="task-toggle" type="checkbox" data-id="' + esc(t.id) + '" ' + (t.enabled ? 'checked' : '') + '> Вкл.</label><button class="icon-btn task-edit" data-id="' + esc(t.id) + '" title="Редактировать">✎</button><button class="icon-btn task-delete" data-id="' + esc(t.id) + '" title="Удалить">✕</button></div></div>';
-        }).join("") + '</div>' : '<div class="empty"><div class="empty-icon">⚙</div><strong>Задач пока нет</strong><p>Создай первую задачу, чтобы она появилась здесь.</p></div>'}
+        <div class="card-title"><h3>Игровые функции</h3><span class="badge demo">15 МОДУЛЕЙ</span></div>
+        <p class="subtitle" style="margin:0 0 16px">Включай нужные функции. Настройки сохраняются на сервере и синхронизируются с агентом.</p>
+        <div id="activitySettings" class="module-grid"><p class="task-meta">Загружаю игровые функции…</p></div>
+        <p id="activitySettingsResult" class="task-meta" style="margin:14px 0 0">Синхронизация настроек…</p>
       </section>
-      <div class="footer">THEEND · TASK MANAGER · DEMO</div>`;
+      <div class="footer">THEEND · LAST ASYLUM</div>`;
     async function updateAgentStatus() {
       const badge = document.getElementById("agentBadge");
       const label = document.getElementById("agentStatusText");
@@ -470,21 +444,6 @@ h1 { margin:0 0 8px;font-size:29px; }
       if (currentPage === "automation") updateAgentStatus();
       else clearInterval(agentStatusTimer);
     }, 15000);
-    document.getElementById("collectResources").onclick = async () => {
-      const button=document.getElementById("collectResources");
-      const result=document.getElementById("collectResourcesResult");
-      button.disabled=true;
-      result.textContent="Проверяю подключение агента…";
-      try {
-        const response=await fetch("/api/agent/collect-resources",{method:"POST"});
-        const data=await response.json().catch(()=>({}));
-        if(!response.ok) throw new Error(data.error || "Не удалось запустить сбор.");
-        result.textContent=data.message || "Агент продолжает локальное сканирование.";
-        logAction("Проверка экрана запрошена","Локальное сканирование · Android agent");
-      } catch(error) {
-        result.textContent=error.message || "Ошибка запуска сбора.";
-      } finally { button.disabled=false; }
-    };
     const activityCatalog = [
       ["town_production","Производство города","Зерно, древесина, травы, антидот"],
       ["exploration_camp","Лагерь разведки","Накопленные награды лагеря"],
@@ -573,51 +532,8 @@ h1 { margin:0 0 8px;font-size:29px; }
       }
     }
     loadActivitySettings();
-    document.getElementById("addTask").onclick = () => openTaskModal();
-    document.getElementById("addDailyPack").onclick = async () => {
-      const current = readTasks();
-      const presets = [["Сбор ресурсов","09:00"],["Проверка энергии","12:00"],["Проверка строительства","15:00"],["Проверка исследований","18:00"],["Проверка альянса","21:00"]];
-      const existing = new Set(current.filter(t => t.recurrence === "daily").map(t => t.title));
-      const additions = presets.filter(p => !existing.has(p[0])).map(p => {
-        const d = new Date(); d.setHours(Number(p[1].slice(0,2)),Number(p[1].slice(3,5)),0,0);
-        return {title:p[0],type:"Ежедневное напоминание",accountId:null,scheduledAt:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+p[1],recurrence:"daily",enabled:true};
-      });
-      if (current.length + additions.length > TASK_LIMIT) { alert("Не хватает места. Удали лишние задачи и повтори."); return; }
-      try {
-        const results = await Promise.all(additions.map(task => fetch("/api/tasks", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(task)})));
-        const failed = results.find(response => !response.ok);
-        if (failed) throw new Error("Не удалось сохранить ежедневный набор.");
-        await refreshTasks();
-        logAction("Добавлен ежедневный набор", additions.length+" напоминаний для Last Asylum");
-        renderAutomation();
-      } catch (error) { alert(error.message || "Ошибка соединения с сервером."); }
-    };
-    document.querySelectorAll(".task-edit").forEach(btn => btn.onclick = () => openTaskModal(btn.dataset.id));
-    document.querySelectorAll(".task-delete").forEach(btn => btn.onclick = async () => {
-      if (readSettings().confirmDelete && !confirm("Удалить эту задачу?")) return;
-      const id = btn.dataset.id;
-      const item = readTasks().find(t => String(t.id) === String(id));
-      try {
-        const response = await fetch("/api/tasks/" + id, {method:"DELETE"});
-        if (!response.ok) throw new Error("Не удалось удалить задачу.");
-        await refreshTasks();
-        logAction("Задача удалена", item ? item.title : "");
-        renderAutomation();
-      } catch (error) { alert(error.message || "Ошибка соединения с сервером."); }
-    });
-    document.querySelectorAll(".task-toggle").forEach(input => input.onchange = async () => {
-      const id = input.dataset.id;
-      const item = readTasks().find(t => String(t.id) === String(id));
-      if (!item) return;
-      try {
-        const response = await fetch("/api/tasks/" + id, {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({...item,enabled:input.checked})});
-        if (!response.ok) throw new Error("Не удалось изменить задачу.");
-        await refreshTasks();
-        logAction(input.checked ? "Задача включена" : "Задача отключена", item.title);
-        renderAutomation();
-      } catch (error) { input.checked = !input.checked; alert(error.message || "Ошибка соединения с сервером."); }
-    });
   }
+
   function renderSchedule() {
     const tasks = readTasks().filter(t => t.enabled).sort((a,b) => String(a.scheduledAt).localeCompare(String(b.scheduledAt)));
     main.innerHTML = `
