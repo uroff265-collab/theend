@@ -136,7 +136,7 @@ app.post("/api/agent/test-tap", async (_req, res) => {
   }
 });
 
-app.post("/api/agent/collect-resources", requireAgentToken, async (_req, res) => {
+app.post("/api/agent/collect-resources", async (_req, res) => {
   // Collection is driven by the agent's local screen recognition. Never enqueue blind coordinates.
   try {
     const state = await pool.query("SELECT emulator_connected, last_seen FROM agent_state WHERE id=1");
