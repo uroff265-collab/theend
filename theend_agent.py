@@ -10,6 +10,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import sys
 
 BASE_URL = os.environ.get("THEEND_URL", "https://theend-1.onrender.com").strip().rstrip("/")
 ADB = os.environ.get("THEEND_ADB", "adb").strip()
@@ -18,10 +19,26 @@ DEVICE_NAME = os.environ.get("THEEND_DEVICE_NAME", platform.node() or "Android e
 
 
 def get_token():
-    # Always ask at launch: avoids silently reusing an old/stale environment token.
-    token = getpass.getpass("Вставьте THEEND_AGENT_TOKEN из Render (ввод скрыт): ").strip()
+    token = os.environ.get("THEEND_AGENT_TOKEN", "").strip()
+    if token:
+        print("Токен загружен из переменных Windows.")
+        return token
+
+    token = getpass.getpass("Один раз вставьте THEEND_AGENT_TOKEN из Render (ввод скрыт): ").strip()
     if not token:
-        raise SystemExit("Токен пустой. Запустите агента снова и вставьте токен из Render.")
+        raise SystemExit("Токен пустой. Запустите агента снова.")
+
+    if sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE
+            ) as key:
+                winreg.SetValueEx(key, "THEEND_AGENT_TOKEN", 0, winreg.REG_SZ, token)
+            os.environ["THEEND_AGENT_TOKEN"] = token
+            print("Токен сохранён в Windows. В следующий раз вводить его не нужно.")
+        except OSError as error:
+            print("Не удалось сохранить токен автоматически:", error)
     return token
 
 
