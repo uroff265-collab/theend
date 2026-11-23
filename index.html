@@ -702,11 +702,17 @@ h1 { margin:0 0 8px;font-size:29px; }
         try { new Notification("TheEnd — напоминание", {body:task.title+" · Last Asylum",tag:"theend-task-"+task.id}); } catch {}
       }
       logAction("Напоминание отправлено", task.title);
-      if (task.recurrence === "daily") task.lastNotifiedDate = today;
-      else task.notifiedAt = now.toISOString();
+      const reminderState = task.recurrence === "daily"
+        ? { lastNotifiedDate:today }
+        : { notifiedAt:now.toISOString() };
+      Object.assign(task, reminderState);
+      fetch("/api/tasks/" + task.id + "/reminder", {
+        method:"PATCH",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(reminderState)
+      }).catch(error => console.error("Could not save reminder state:", error));
       changed = true;
     });
-    if (changed) saveTasks(tasks);
   }
   checkTaskReminders();
   setInterval(checkTaskReminders,30000);
