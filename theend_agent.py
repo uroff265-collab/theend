@@ -59,13 +59,35 @@ def api(path,data=None):
         if e.code==401: raise RuntimeError("HTTP 401: токен не совпадает с THEEND_AGENT_TOKEN в Render.")
         raise RuntimeError("HTTP "+str(e.code)+" при запросе "+path)
 
+TESSDATA_ARGS=""
+
 def configure_ocr():
+    global TESSDATA_ARGS
     if not OCR: raise SystemExit("Установи зависимости: py -m pip install pytesseract pillow opencv-python-headless")
     candidates=[shutil.which("tesseract"),r"C:\Program Files\Tesseract-OCR\tesseract.exe",r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]
     for p in candidates:
         if p and (os.path.isfile(p) if os.path.isabs(p) else True):
             pytesseract.pytesseract.tesseract_cmd=p
             break
+    # Prefer the user's writable model folder; Program Files is often read-only.
+    model_dirs=[]
+    if os.name=="nt":
+        local=os.environ.get("LOCALAPPDATA","")
+        if local: model_dirs.append(os.path.join(local,"TheEnd","tessdata"))
+    model_dirs.extend([os.path.join(os.path.dirname(pytesseract.pytesseract.tesseract_cmd),"tessdata")])
+    for folder in model_dirs:
+        if os.path.isdir(folder) and any(os.path.isfile(os.path.join(folder,n+".traineddata")) for n in ("eng","rus")):
+            TESSDATA_ARGS='--tessdata-dir "'+folder+'"'
+            break
+    try:
+        available=pytesseract.get_languages(config=TESSDATA_ARGS)
+        preferred=[x for x in ("eng","rus") if x in available]
+        if preferred:
+            print("OCR: языки", "+".join(preferred), "| модели:", TESSDATA_ARGS or "системная папка")
+        else:
+            print("OCR: языковые модели eng/rus не найдены; доступно:", ", ".join(available))
+    except Exception as e:
+        print("OCR: не удалось проверить модели:",e)
 
 def screen_png():
     # Screen pixels are read into memory only; no screenshot files or uploads are created.
@@ -101,7 +123,7 @@ def recognize(png):
     im=ImageEnhance.Contrast(im).enhance(1.8).filter(ImageFilter.SHARPEN)
     langs=[]
     try:
-        available=pytesseract.get_languages(config="")
+        available=pytesseract.get_languages(config=TESSDATA_ARGS)
         if "eng" in available and "rus" in available: langs.append("eng+rus")
         if "eng" in available: langs.append("eng")
         if "rus" in available: langs.append("rus")
@@ -111,7 +133,7 @@ def recognize(png):
     for lang in langs:
         for psm in (11,6):
             try:
-                d=pytesseract.image_to_data(im,lang=lang,config=f"--oem 3 --psm {psm}",output_type=pytesseract.Output.DICT)
+                d=pytesseract.image_to_data(im,lang=lang,config=(TESSDATA_ARGS+f" --oem 3 --psm {psm}").strip(),output_type=pytesseract.Output.DICT)
                 words=[]
                 for i,t in enumerate(d.get("text",[])):
                     t=re.sub(r"\s+"," ",t).strip()
@@ -217,8 +239,7 @@ SEMANTIC_MODULES = {
         "context": ("помощь альянсу", "alliance help"),
         "actions": ("помочь всем", "помочь", "help all", "help"),
         "label": "Помощь альянсу"
-    },
-    "golden_eggs": {
+    },    "golden_eggs": {
         "context": ("золотые яйца", "golden eggs"),
         "actions": ("забрать", "получить", "claim", "collect"),
         "label": "Золотые яйца"
@@ -437,8 +458,7 @@ def collect_offline_production():
             if after!=before: return True,"Нажата кнопка сбора; интерфейс изменился: "+after[:240]
             return False,"Нажатие не подтвердилось изменением экрана. Повторно не нажимал."
         if not context: return False,"Панель офлайн-продукции не подтверждена. Ничего не нажимал."
-        if page<3:
-            w,h=get_screen_size()
+        if page<3:            w,h=get_screen_size()
             adb("shell","input","swipe",str(round(w*.5)),str(round(h*.78)),str(round(w*.5)),str(round(h*.38)),"550")
             time.sleep(1.0)
     return False,"Кнопка сбора не найдена однозначно. Ничего не нажимал."
