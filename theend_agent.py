@@ -76,15 +76,15 @@ def get_screen_size():
     """Return active emulator resolution, falling back to PNG dimensions."""
     try:
         output=adb("shell","wm","size",timeout=8)
-        matches=re.findall(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)",output,re.I)
+        matches=re.findall(r"(?:Physical|Override) size:\s*(\d+)x(\d+)",output,re.I)
         if matches: return tuple(map(int,matches[-1]))
-        matches=re.findall(r"(\\d{3,5})x(\\d{3,5})",output)
+        matches=re.findall(r"(\d{3,5})x(\d{3,5})",output)
         if matches: return tuple(map(int,matches[-1]))
     except Exception:
         pass
     try:
         png=screen_png()
-        if png[:8]==b"\\x89PNG\\r\\n\\x1a\\n" and len(png)>=24:
+        if png[:8]==b"\x89PNG\r\n\x1a\n" and len(png)>=24:
             width=int.from_bytes(png[16:20],"big")
             height=int.from_bytes(png[20:24],"big")
             if width>0 and height>0: return width,height
@@ -520,7 +520,7 @@ def poll_game_task(activities):
 def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
-    if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\\platform-tools\\adb.exe")
+    if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
     print("TheEnd Agent v9 запущен | build 2026-11-23-adb-screen-size-fallback")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
