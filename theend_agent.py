@@ -217,8 +217,7 @@ def tap(x,y):
     global LAST_ACTION_EVENT
     width,height=get_screen_size()
     x,y=int(round(x)),int(round(y))
-    if not (0<=x<width and 0<=y<height):        raise ValueError(f"Координаты ({x},{y}) вне экрана {width}x{height}.")
-    adb("shell","input","tap",str(x),str(y))
+    if not (0<=x<width and 0<=y<height):        raise ValueError(f"Координаты ({x},{y}) вне экрана {width}x{height}.")    adb("shell","input","tap",str(x),str(y))
     LAST_ACTION_EVENT={"x":int(x),"y":int(y),"at":int(time.time())}
 
 # Conservative semantic automation: only click a unique, clickable Android UI node
@@ -436,7 +435,8 @@ def collect_offline_production():
     """Use live HUD/OCR detection and refuse ambiguous taps."""
     png=screen_png()
     words=recognize(png)
-    anchor=detect_top_food_icon(png,words)    if not anchor:
+    anchor=detect_top_food_icon(png,words)
+    if not anchor:
         return False,"Не смог определить значок ресурса на верхней панели. Ничего не нажимал."
     print(time.strftime("%H:%M:%S"),"Производство: найден счётчик",anchor["counter"],"значок:",anchor["x"],anchor["y"])
     tap(anchor["x"],anchor["y"])
