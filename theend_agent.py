@@ -13,15 +13,23 @@ import urllib.request
 import sys
 
 BASE_URL = os.environ.get("THEEND_URL", "https://theend-1.onrender.com").strip().rstrip("/")
-ADB = os.environ.get("THEEND_ADB", "adb").strip()
+ADB = os.environ.get("THEEND_ADB", r"C:\platform-tools\adb.exe" if os.name == "nt" else "adb").strip()
 ADB_SERIAL = os.environ.get("THEEND_ADB_SERIAL", "127.0.0.1:5555").strip()
 DEVICE_NAME = os.environ.get("THEEND_DEVICE_NAME", platform.node() or "Android emulator")
 
 
 def get_token():
     token = os.environ.get("THEEND_AGENT_TOKEN", "").strip()
+    if not token and sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                token, _ = winreg.QueryValueEx(key, "THEEND_AGENT_TOKEN")
+            token = token.strip()
+        except (OSError, ValueError):
+            token = ""
     if token:
-        print("Токен загружен из переменных Windows.")
+        print("Токен загружен из Windows.")
         return token
 
     token = getpass.getpass("Один раз вставьте THEEND_AGENT_TOKEN из Render (ввод скрыт): ").strip()
@@ -109,7 +117,7 @@ def run_one_command():
             if command.get("type") != "tap":
                 raise ValueError("Неподдерживаемая команда")
             size_text = adb("shell", "wm", "size").stdout
-            match = re.search(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)", size_text)
+            match = re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)", size_text)
             if not match:
                 raise RuntimeError("Не удалось определить размер экрана эмулятора")
             width, height = int(match.group(1)), int(match.group(2))
@@ -124,6 +132,8 @@ def run_one_command():
         except Exception as error:
             print("Ошибка выполнения команды:", error)
         request_json("/api/agent/commands/" + str(command_id) + "/result", {"ok": success})
+        # Let the game react before the next queued tap.
+        time.sleep(1.5)
     except Exception as error:
         print("Ошибка командного сервиса:", error)
 
