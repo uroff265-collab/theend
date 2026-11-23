@@ -65,6 +65,31 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       completed_at TIMESTAMPTZ
     );
+
+    CREATE TABLE IF NOT EXISTS automation_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      activities JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    INSERT INTO automation_settings (id, activities)
+    VALUES (1, '{
+      "town_production": false,
+      "exploration_camp": false,
+      "sanctuary": false,
+      "heal_wounded": false,
+      "alliance_help": false,
+      "alliance_tech": false,
+      "rallies": false,
+      "excavations": false,
+      "caravans": false,
+      "black_ops": false,
+      "golden_eggs": false,
+      "town_shield": false,
+      "cheese_thief": false,
+      "survival_battle": false,
+      "scouting": false
+    }'::jsonb)
+    ON CONFLICT (id) DO NOTHING;
   `);
 }
 
@@ -75,6 +100,56 @@ function requireAgentToken(req, res, next) {
   if (supplied !== "Bearer " + expected) return res.status(401).json({ error:"Неверный токен агента." });
   next();
 }
+
+const ACTIVITY_KEYS = [
+  "town_production","exploration_camp","sanctuary","heal_wounded",
+  "alliance_help","alliance_tech","rallies","excavations","caravans",
+  "black_ops","golden_eggs","town_shield","cheese_thief","survival_battle","scouting"
+];
+
+app.get("/api/automation/settings", async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT activities, updated_at AS \"updatedAt\" FROM automation_settings WHERE id=1");
+    res.json(result.rows[0] || {activities:{}, updatedAt:null});
+  } catch (error) {
+    console.error("Could not load automation settings:", error.message);
+    res.status(500).json({error:"Не удалось загрузить настройки автоматизации."});
+  }
+});
+
+app.put("/api/automation/settings", async (req, res) => {
+  const incoming = req.body && req.body.activities;
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+    return res.status(400).json({error:"Ожидается объект activities."});
+  }
+  const activities = {};
+  for (const key of ACTIVITY_KEYS) {
+    if (incoming[key] !== undefined && typeof incoming[key] !== "boolean") {
+      return res.status(400).json({error:"Настройка " + key + " должна быть true или false."});
+    }
+    activities[key] = incoming[key] === true;
+  }
+  try {
+    const result = await pool.query(
+      "INSERT INTO automation_settings (id, activities, updated_at) VALUES (1, $1::jsonb, NOW()) ON CONFLICT (id) DO UPDATE SET activities=EXCLUDED.activities, updated_at=NOW() RETURNING activities, updated_at AS \"updatedAt\"",
+      [JSON.stringify(activities)]
+    );
+    res.json({ok:true, ...result.rows[0]});
+  } catch (error) {
+    console.error("Could not save automation settings:", error.message);
+    res.status(500).json({error:"Не удалось сохранить настройки автоматизации."});
+  }
+});
+
+app.get("/api/agent/config", requireAgentToken, async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT activities, updated_at AS \"updatedAt\" FROM automation_settings WHERE id=1");
+    res.json(result.rows[0] || {activities:{}, updatedAt:null});
+  } catch (error) {
+    console.error("Could not load agent config:", error.message);
+    res.status(500).json({error:"Не удалось загрузить конфигурацию агента."});
+  }
+});
 
 app.get("/api/agent/status", async (_req, res) => {
   try {
