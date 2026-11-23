@@ -77,7 +77,7 @@ def capture_screen_png():
     """Capture emulator screen locally; never uploads it."""
     result = subprocess.run([ADB, "-s", ADB_SERIAL, "exec-out", "screencap", "-p"],
                             capture_output=True, timeout=15, check=True)
-    if not result.stdout.startswith(b"\\x89PNG"):
+    if not result.stdout.startswith(b"\x89PNG"):
         raise RuntimeError("ADB вернул некорректный снимок экрана")
     return result.stdout
 
@@ -93,7 +93,7 @@ def ocr_game_screen(png_bytes):
         raise RuntimeError("Не найден Tesseract OCR. Установите Tesseract OCR для Windows.")
     words = []
     for i, raw in enumerate(data.get("text", [])):
-        label = re.sub(r"\\s+", " ", raw).strip()
+        label = re.sub(r"\s+", " ", raw).strip()
         try:
             confidence = float(data["conf"][i])
             x, y = int(data["left"][i]), int(data["top"][i])
@@ -115,7 +115,9 @@ def find_ocr_collection_action(words):
             return label, x, y, confidence
     return None
 
-\ndef adb(*args, timeout=8):
+
+
+def adb(*args, timeout=8):
     return subprocess.run(
         [ADB, "-s", ADB_SERIAL, *args],
         capture_output=True, text=True, timeout=timeout, check=True
