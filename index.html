@@ -264,7 +264,6 @@ h1 { margin:0 0 8px;font-size:29px; }
   const form = document.getElementById("accountForm");
   const KEY = "theend_accounts_v2";
   const TASK_KEY = "theend_tasks_v1";
-  const HISTORY_KEY = "theend_history_v1";
   const SETTINGS_KEY = "theend_settings_v1";
   const LIMIT = 5;
   const TASK_LIMIT = 20;
@@ -296,16 +295,28 @@ h1 { margin:0 0 8px;font-size:29px; }
   }
   const readTasks = () => tasksCache;
   const saveTasks = value => { tasksCache = value; };
-  const readHistory = () => {
-    try { const value = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); return Array.isArray(value) ? value : []; }
-    catch { return []; }
-  };
-  const saveHistory = value => localStorage.setItem(HISTORY_KEY, JSON.stringify(value.slice(0, 100)));
-  const logAction = (title, detail = "") => {
-    const history = readHistory();
-    history.unshift({ id: Date.now() + Math.random(), title, detail, at: new Date().toISOString() });
-    saveHistory(history);
-  };
+  let historyCache = [];
+  async function refreshHistory() {
+    const response = await fetch("/api/history");
+    if (!response.ok) throw new Error("Не удалось загрузить историю с сервера.");
+    historyCache = await response.json();
+    return historyCache;
+  }
+  const readHistory = () => historyCache;
+  async function logAction(title, detail = "") {
+    try {
+      const response = await fetch("/api/history", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({title, detail})
+      });
+      if (!response.ok) throw new Error("Не удалось сохранить запись истории.");
+      await refreshHistory();
+      if (currentPage === "history") renderHistory();
+    } catch (error) {
+      console.error("History logging failed:", error);
+    }
+  }
   const readSettings = () => {
     try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{"confirmDelete":true}'); }
     catch { return { confirmDelete:true }; }
@@ -423,21 +434,31 @@ h1 { margin:0 0 8px;font-size:29px; }
       </section>
       <div class="footer">THEEND · SCHEDULE · DEMO</div>`;
   }
-  function renderHistory() {
+  async function renderHistory() {
+    main.innerHTML = `${topbar("История задач")}<h1>История задач</h1><p class="subtitle">Журнал действий панели. Последние 100 записей хранятся в базе данных.</p><section class="card"><div class="empty">Загружаю историю…</div></section>`;
+    try { await refreshHistory(); }
+    catch (error) {
+      main.innerHTML = `${topbar("История задач")}<h1>История задач</h1><section class="card"><div class="empty">${esc(error.message)}</div></section>`;
+      return;
+    }
     const history = readHistory();
     main.innerHTML = `
       ${topbar("История задач")}
       <h1>История задач</h1>
-      <p class="subtitle">Журнал изменений задач и действий в панели. Хранится локально (последние 100 записей).</p>
+      <p class="subtitle">Журнал действий панели. Последние 100 записей хранятся в базе данных.</p>
       <section class="card">
         <div class="card-title"><h3>Последние действия</h3><button class="icon-btn" id="clearHistory">Очистить</button></div>
         ${history.length ? history.map(item => '<div class="activity"><div class="activity-icon">▤</div><div class="account-info"><strong>' + esc(item.title) + '</strong><small>' + esc(item.detail || 'Без дополнительных сведений') + '</small><small>' + esc(formatDate(item.at)) + '</small></div></div>').join("") : '<div class="empty"><div class="empty-icon">▤</div><strong>История пока пуста</strong><p>Здесь будут отображаться изменения задач.</p></div>'}
       </section>
-      <div class="footer">THEEND · HISTORY · DEMO</div>`;
-    document.getElementById("clearHistory").onclick = () => {
+      <div class="footer">THEEND · HISTORY · DATABASE</div>`;
+    document.getElementById("clearHistory").onclick = async () => {
       if (!confirm("Очистить всю историю действий?")) return;
-      saveHistory([]);
-      renderHistory();
+      try {
+        const response = await fetch("/api/history", {method:"DELETE"});
+        if (!response.ok) throw new Error("Не удалось очистить историю.");
+        await refreshHistory();
+        renderHistory();
+      } catch (error) { alert(error.message || "Ошибка соединения с сервером."); }
     };
   }
   function renderSettings() {
@@ -719,11 +740,12 @@ h1 { margin:0 0 8px;font-size:29px; }
   try {
     await refreshAccounts();
     await refreshTasks();
+    await refreshHistory();
     showPage("home");
   } catch (error) {
     main.innerHTML = `<section class="card"><h2>Нет связи с TheEnd API</h2><p class="subtitle">${esc(error.message)}</p><button class="primary" id="retryApi">Повторить подключение</button></section>`;
     document.getElementById("retryApi").onclick = async () => {
-      try { await refreshAccounts(); showPage(currentPage); }
+      try { await refreshAccounts(); await refreshTasks(); await refreshHistory(); showPage(currentPage); }
       catch (retryError) { alert(retryError.message || "Сервер пока недоступен."); }
     };
   }
