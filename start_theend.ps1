@@ -6,6 +6,12 @@ Set-Location $Folder
 
 Write-Host "=== TheEnd Bot: запуск ===" -ForegroundColor Cyan
 
+# Prepare OCR/OpenCV dependencies and language data on first run.
+$Setup = Join-Path $Folder "install_theend.ps1"
+Invoke-WebRequest "$Repo/install_theend.ps1" -OutFile $Setup
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
+if ($LASTEXITCODE -ne 0) { throw "Первичная настройка TheEnd завершилась ошибкой." }
+
 # Stop only older TheEnd agent processes, not unrelated Python programs.
 try {
   $old = Get-CimInstance Win32_Process | Where-Object {
