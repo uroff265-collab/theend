@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TheEnd Agent v8: ADB + OCR task automation for Last Asylum."""
+"""TheEnd Agent v9: robust ADB screen sizing + OCR task automation."""
 import getpass, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 
@@ -71,6 +71,26 @@ def screen_png():
     b=adb("exec-out","screencap","-p",timeout=15,binary=True)
     if not b.startswith(b"\x89PNG"): raise RuntimeError("Некорректный кадр экрана от ADB.")
     return b
+
+def get_screen_size():
+    """Return active emulator resolution, falling back to PNG dimensions."""
+    try:
+        output=adb("shell","wm","size",timeout=8)
+        matches=re.findall(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)",output,re.I)
+        if matches: return tuple(map(int,matches[-1]))
+        matches=re.findall(r"(\\d{3,5})x(\\d{3,5})",output)
+        if matches: return tuple(map(int,matches[-1]))
+    except Exception:
+        pass
+    try:
+        png=screen_png()
+        if png[:8]==b"\\x89PNG\\r\\n\\x1a\\n" and len(png)>=24:
+            width=int.from_bytes(png[16:20],"big")
+            height=int.from_bytes(png[20:24],"big")
+            if width>0 and height>0: return width,height
+    except Exception:
+        pass
+    raise RuntimeError("Не удалось определить размер экрана через ADB (wm size и PNG). Проверь подключение LDPlayer.")
 
 def recognize(png):
     im=Image.open(io.BytesIO(png)).convert("RGB")
@@ -172,11 +192,10 @@ def find_collection(png, words):
 
 def tap(x,y):
     global LAST_ACTION_EVENT
-    s=adb("shell","wm","size")
-    m=re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)",s)
-    if not m: raise RuntimeError("Не удалось определить размер экрана.")
-    width,height=map(int,m.groups())
-    if not (0<=x<width and 0<=y<height): raise ValueError("Координаты вне экрана.")
+    width,height=get_screen_size()
+    x,y=int(round(x)),int(round(y))
+    if not (0<=x<width and 0<=y<height):
+        raise ValueError(f"Координаты ({x},{y}) вне экрана {width}x{height}.")
     adb("shell","input","tap",str(x),str(y))
     LAST_ACTION_EVENT={"x":int(x),"y":int(y),"at":int(time.time())}
 
@@ -361,9 +380,8 @@ def run_queued_command():
         ok=False
         try:
             if c.get("type")!="tap": raise ValueError("Неподдерживаемая команда.")
-            s=adb("shell","wm","size"); m=re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)",s)
-            if not m: raise RuntimeError("Размер экрана не определён.")
-            w,h=map(int,m.groups()); x=round(int(c["x"])*w/605); y=round(int(c["y"])*h/1070)
+            w,h=get_screen_size()
+            x=round(int(c["x"])*w/605); y=round(int(c["y"])*h/1070)
             tap(x,y); ok=True
             print(time.strftime("%H:%M:%S"),"Команда сайта выполнена.")
         except Exception as e: print("Команда не выполнена:",e)
@@ -371,17 +389,11 @@ def run_queued_command():
     except Exception as e: print("Очередь команд:",e)
 
 def scaled_tap(x, y, ref_w=900, ref_h=1600):
-    s=adb("shell","wm","size")
-    m=re.search(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)",s)
-    if not m: raise RuntimeError("Размер экрана не определён.")
-    w,h=map(int,m.groups())
+    w,h=get_screen_size()
     tap(round(x*w/ref_w),round(y*h/ref_h))
 
 def swipe_up():
-    s=adb("shell","wm","size")
-    m=re.search(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)",s)
-    if not m: raise RuntimeError("Размер экрана не определён.")
-    w,h=map(int,m.groups())
+    w,h=get_screen_size()
     adb("shell","input","swipe",str(round(w*.5)),str(round(h*.78)),
         str(round(w*.5)),str(round(h*.28)),"650")
 
@@ -509,7 +521,7 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\\platform-tools\\adb.exe")
-    print("TheEnd Agent v8 запущен | build 2026-11-23-offline-wheat-flow")
+    print("TheEnd Agent v9 запущен | build 2026-11-23-adb-screen-size-fallback")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Автораспознавание включено: поиск круглых пузырей ресурсов + проверка числа под пузырём. Кадры только в памяти, без сохранения и отправки.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
