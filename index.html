@@ -364,6 +364,10 @@ h1 { margin:0 0 8px;font-size:29px; }
         <p>Задачи и расписание сохраняются на сервере в Neon. Это планировщик напоминаний, а не управление игровым клиентом.</p>
         <div style="display:flex;gap:9px;flex-wrap:wrap"><button class="primary" id="addTask">＋ Создать задачу</button><button class="secondary" id="addDailyPack">Добавить ежедневный набор</button></div>
       </section>
+      <section class="card" style="margin-bottom:16px">
+        <div class="card-title"><h3>Подключение Android-агента</h3><span class="badge demo" id="agentBadge">Проверка…</span></div>
+        <p id="agentStatusText" class="subtitle" style="margin:0">Агент связывает TheEnd с Android-эмулятором на компьютере.</p>
+      </section>
       <section class="stats">
         <div class="stat"><div class="stat-label">Всего задач</div><div class="stat-value">${tasks.length} / ${TASK_LIMIT}</div><div class="stat-foot">Сохранено в Neon</div></div>
         <div class="stat"><div class="stat-label">Включено</div><div class="stat-value">${tasks.filter(t => t.enabled).length}</div><div class="stat-foot">Готовы по расписанию</div></div>
@@ -377,6 +381,38 @@ h1 { margin:0 0 8px;font-size:29px; }
         }).join("") + '</div>' : '<div class="empty"><div class="empty-icon">⚙</div><strong>Задач пока нет</strong><p>Создай первую задачу, чтобы она появилась здесь.</p></div>'}
       </section>
       <div class="footer">THEEND · TASK MANAGER · DEMO</div>`;
+    async function updateAgentStatus() {
+      const badge = document.getElementById("agentBadge");
+      const label = document.getElementById("agentStatusText");
+      if (!badge || !label) return;
+      try {
+        const response = await fetch("/api/agent/status");
+        const status = await response.json();
+        if (!response.ok) throw new Error(status.error || "Статус недоступен");
+        if (!status.configured) {
+          badge.textContent = "НЕ НАСТРОЕН";
+          label.textContent = "Нужно добавить THEEND_AGENT_TOKEN в настройки сервера Render.";
+        } else if (status.online && status.agent && status.agent.emulatorConnected) {
+          badge.textContent = "ЭМУЛЯТОР ПОДКЛЮЧЁН";
+          badge.className = "badge";
+          label.textContent = status.agent.deviceName + " · связь активна";
+        } else if (status.online) {
+          badge.textContent = "АГЕНТ В СЕТИ";
+          label.textContent = (status.agent.deviceName || "Android") + " · эмулятор не обнаружен";
+        } else {
+          badge.textContent = "НЕ В СЕТИ";
+          label.textContent = "Запусти TheEnd Agent на компьютере с работающим Android-эмулятором.";
+        }
+      } catch (error) {
+        badge.textContent = "ОШИБКА";
+        label.textContent = error.message || "Не удалось проверить агента.";
+      }
+    }
+    updateAgentStatus();
+    const agentStatusTimer = setInterval(() => {
+      if (currentPage === "automation") updateAgentStatus();
+      else clearInterval(agentStatusTimer);
+    }, 15000);
     document.getElementById("addTask").onclick = () => openTaskModal();
     document.getElementById("addDailyPack").onclick = async () => {
       const current = readTasks();
