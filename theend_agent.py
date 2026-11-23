@@ -96,7 +96,7 @@ def run_one_command():
             if not match:
                 raise RuntimeError("Не удалось определить размер экрана эмулятора")
             width, height = int(match.group(1)), int(match.group(2))
-            x, y = int(command["x"]), int(command["y"])
+            # Scale calibrated base coordinates to actual emulator resolution.\n            x = round(int(command["x"]) * width / 605)\n            y = round(int(command["y"]) * height / 1070)
             if not (0 <= x < width and 0 <= y < height):
                 raise ValueError("Координаты касания за пределами экрана")
             adb("shell", "input", "tap", str(x), str(y))
