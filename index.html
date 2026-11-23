@@ -361,7 +361,7 @@ h1 { margin:0 0 8px;font-size:29px; }
       <section class="hero">
         <span class="hero-tag">TASK MANAGER · DATABASE</span>
         <h2>Управление задачами</h2>
-        <p>Задачи и расписание сохраняются на сервере в Neon. Агент выполняет доступные действия сбора по текстовым элементам интерфейса; если игра скрывает их, понадобится отдельное компьютерное зрение.</p>
+        <p>Задачи и расписание сохраняются на сервере в Neon. Агент анализирует экран локально. Доступно распознавание игровых элементов; действия без уверенного совпадения не выполняются.</p>
         <div style="display:flex;gap:9px;flex-wrap:wrap"><button class="primary" id="addTask">＋ Создать задачу</button><button class="secondary" id="addDailyPack">Добавить ежедневный набор</button></div>
       </section>
       <section class="card" style="margin-bottom:16px">
@@ -369,9 +369,9 @@ h1 { margin:0 0 8px;font-size:29px; }
         <p id="agentStatusText" class="subtitle" style="margin:0">Агент анализирует доступные элементы интерфейса Android и выполняет разрешённые игровые действия автоматически.</p>
       </section>
       <section class="card" style="margin-bottom:16px">
-        <div class="card-title"><h3>Сбор ресурсов</h3><span class="badge demo">ТЕСТОВЫЙ МАРШРУТ</span></div>
-        <p class="subtitle" style="margin:0 0 14px">Последовательно проверяет три ресурсные точки на твоей базе. Оставь игру на главном экране и не трогай эмулятор во время выполнения.</p>
-        <button class="primary" id="collectResources">Собрать ресурсы</button>
+        <div class="card-title"><h3>Сбор ресурсов</h3><span class="badge demo">ЛОКАЛЬНЫЙ АНАЛИЗ</span></div>
+        <p class="subtitle" style="margin:0 0 14px">Запускает проверку статуса. Агент сканирует экран каждые 5 секунд; кадры не сохраняются и не отправляются.</p>
+        <button class="primary" id="collectResources">Проверить экран</button>
         <p id="collectResourcesResult" class="task-meta" style="margin:12px 0 0">Ожидает запуска.</p>
       </section>
       <section class="card" style="margin-bottom:16px">
@@ -429,33 +429,16 @@ h1 { margin:0 0 8px;font-size:29px; }
       const button=document.getElementById("collectResources");
       const result=document.getElementById("collectResourcesResult");
       button.disabled=true;
-      result.textContent="Добавляю три ресурсные точки в очередь…";
+      result.textContent="Проверяю подключение агента…";
       try {
         const response=await fetch("/api/agent/collect-resources",{method:"POST"});
         const data=await response.json().catch(()=>({}));
         if(!response.ok) throw new Error(data.error || "Не удалось запустить сбор.");
-        result.textContent="В очереди "+data.queued+" касания. Подожди около 10 секунд и проверь игру.";
-        logAction("Сбор ресурсов запущен","Три ресурсные точки · Android agent");
+        result.textContent="data.message || "Агент продолжает локальное сканирование."";
+        logAction("Проверка экрана запрошена","Локальное сканирование · Android agent");
       } catch(error) {
         result.textContent=error.message || "Ошибка запуска сбора.";
       } finally { button.disabled=false; }
-    };
-    document.getElementById("agentTestTap").onclick = async () => {
-      const button = document.getElementById("agentTestTap");
-      const result = document.getElementById("agentCommandResult");
-      button.disabled = true;
-      result.textContent = "Отправляю команду агенту…";
-      try {
-        const response = await fetch("/api/agent/test-tap", {method:"POST"});
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || "Не удалось отправить команду.");
-        result.textContent = "Команда отправлена. Подожди пару секунд и проверь экран эмулятора.";
-        logAction("Тестовое касание отправлено", "Android agent · command " + data.commandId);
-      } catch (error) {
-        result.textContent = error.message || "Ошибка отправки команды.";
-      } finally {
-        button.disabled = false;
-      }
     };
     document.getElementById("addTask").onclick = () => openTaskModal();
     document.getElementById("addDailyPack").onclick = async () => {
