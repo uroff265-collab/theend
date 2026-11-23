@@ -131,3 +131,54 @@ def execute_verified(
     # A changed hierarchy is evidence of UI transition, not proof that the
     # server accepted the in-game action. Report this distinction explicitly.
     return True, "ui_changed_result_unconfirmed"
+
+
+def analyze_screen(words: Iterable[dict], width: int, height: int) -> dict:
+    """Summarize OCR observations by screen region; never produces tap coordinates."""
+    if width <= 0 or height <= 0:
+        raise ValueError("Screen dimensions must be positive")
+    observations = []
+    for word in words:
+        text = str(word.get("text", "")).strip()
+        try:
+            x, y = int(word["x"]), int(word["y"])
+            confidence = float(word.get("conf", 0))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not text or confidence < 65 or not (0 <= x < width and 0 <= y < height):
+            continue
+        region = "top_hud" if y < height * 0.16 else "bottom_menu" if y > height * 0.82 else "game_area"
+        observations.append({"text": text, "x": x, "y": y, "confidence": round(confidence, 1), "region": region})
+
+    rows = []
+    for item in sorted(observations, key=lambda value: (value["y"], value["x"])):
+        row = next((candidate for candidate in rows if abs(candidate["y"] - item["y"]) <= 28), None)
+        if row is None:
+            row = {"y": item["y"], "items": []}
+            rows.append(row)
+        row["items"].append(item)
+
+    lines = []
+    for row in rows:
+        row["items"].sort(key=lambda value: value["x"])
+        text = " ".join(item["text"] for item in row["items"])
+        y = row["y"]
+        normalized = normalize(text)
+        region = "top_hud" if y < height * 0.16 else "bottom_menu" if y > height * 0.82 else "game_area"
+        lines.append({"text": text, "normalized": normalized, "y": y, "region": region,
+                      "confidence": round(sum(item["confidence"] for item in row["items"]) / len(row["items"]), 1)})
+
+    nav_terms = {"сумка": "bag", "звезды": "stars", "почта": "mail", "герой": "hero", "мир": "world"}
+    navigation = sorted({value for line in lines for term, value in nav_terms.items()
+                         if term in line["normalized"]})
+    quest_terms = ("соберите", "задание", "миссия", "quest", "mission")
+    quests = [line["text"] for line in lines if any(term in line["normalized"] for term in quest_terms)]
+    counters = []
+    for item in observations:
+        compact = re.sub(r"[^0-9.,kmb]", "", item["text"].casefold())
+        if item["region"] == "top_hud" and any(char.isdigit() for char in compact):
+            counters.append({"text": item["text"], "x": item["x"], "y": item["y"],
+                             "confidence": item["confidence"]})
+    return {"resolution": [width, height], "lines": lines, "navigation": navigation,
+            "quest_text": quests, "top_counters": counters,
+            "observed_word_count": len(observations)}
