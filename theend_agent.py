@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""TheEnd Agent v10: adaptive HUD detection + guarded OCR automation."""
+"""TheEnd Agent v12: accessibility-grounded guarded automation."""
 import getpass, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
+from theend_vision import parse_hierarchy, choose_action
 
 BASE_URL=os.environ.get("THEEND_URL","https://theend-1.onrender.com").strip().rstrip("/")
 ADB=os.environ.get("THEEND_ADB",r"C:\platform-tools\adb.exe" if os.name=="nt" else "adb").strip()
@@ -281,36 +282,33 @@ def find_semantic_ocr_target(activities):
     return None
 
 def run_semantic_modules(activities):
+    """Execute only a unique, context-confirmed clickable accessibility target."""
     outcomes=[]
-    nodes=read_ui_nodes()
-    visible=" ".join(n["label"] for n in nodes)
+    try:
+        adb("shell","uiautomator","dump","/sdcard/theend-window.xml",timeout=12)
+        raw=adb("shell","cat","/sdcard/theend-window.xml",timeout=8)
+        nodes=parse_hierarchy(raw)
+    except Exception as e:
+        print("Семантические модули: дерево интерфейса недоступно; нажатий нет:",str(e)[:160])
+        return outcomes
     for key,spec in SEMANTIC_MODULES.items():
         if activities.get(key) is not True: continue
-        if nodes and any(norm(ctx) in visible for ctx in spec["context"]):
-            matches=[n for n in nodes if n["clickable"] and n["enabled"]
-                     and any(n["label"]==norm(action) for action in spec["actions"])]
-            if len(matches)!=1:
-                outcomes.append((key,False,"Не найдена единственная безопасная кнопка"))
-                continue
-            target=matches[0]; x,y=target["x"],target["y"]; label=target["label"]
-        else:
-            found=find_semantic_ocr_target({key:True})
-            if not found:
-                outcomes.append((key,False,"Нужный экран или кнопка не распознаны"))
-                continue
-            _,_,target=found; x,y=target["x"],target["y"]; label=target["text"]
+        target,reason=choose_action(key,nodes)
+        if target is None:
+            outcomes.append((key,False,"Безопасная цель не подтверждена: "+reason))
+            continue
         try:
+            x,y=target.center
             tap(x,y)
-            print(time.strftime("%H:%M:%S"),"Модуль:",spec["label"],"— действие:",label)
+            print(time.strftime("%H:%M:%S"),"Модуль:",spec["label"],"— точная кнопка:",target.label)
             time.sleep(1.5)
-            after=read_ui_nodes()
-            after_labels=" ".join(n["label"] for n in after)
-            changed=bool(after and label not in after_labels)
-            outcomes.append((key,changed,"Элемент исчез/изменился" if changed else "Нажатие сделано, игровой результат пока не подтверждён"))
-            print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"—",outcomes[-1][2])
+            adb("shell","uiautomator","dump","/sdcard/theend-window.xml",timeout=12)
+            after=parse_hierarchy(adb("shell","cat","/sdcard/theend-window.xml",timeout=8))
+            changed=[(n.label,n.bounds,n.enabled) for n in nodes] != [(n.label,n.bounds,n.enabled) for n in after]
+            detail="Интерфейс изменился; результат игры не подтверждён." if changed else "Интерфейс не изменился; повторного нажатия не будет."
+            outcomes.append((key,changed,detail))
         except Exception as e:
-            outcomes.append((key,False,"Ошибка: "+str(e)[:180]))
-            print(time.strftime("%H:%M:%S"),"Модуль",spec["label"],"пропущен:",e)
+            outcomes.append((key,False,"Ошибка выполнения: "+str(e)[:160]))
     return outcomes
 
 GAME_MEMORY_PATH=os.path.join(os.path.dirname(os.path.abspath(__file__)),"theend_game_memory.json")
@@ -536,9 +534,9 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v11 запущен | build 2026-11-23-no-blind-background-taps")
+    print("TheEnd Agent v12 запущен | build 2026-11-23-accessibility-grounded-actions")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
-    print("Безопасный режим: отключены фоновые нажатия по предполагаемым пузырям ресурсов.")
+    print("Распознавание: только подтверждённые кнопки Android UI; OCR-координаты не нажимаются.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
         now=time.time(); online=connected()
