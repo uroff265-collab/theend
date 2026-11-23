@@ -66,8 +66,8 @@ except ImportError:
     OCR_AVAILABLE = False
 
 if OCR_AVAILABLE:
-    for _candidate in (shutil.which("tesseract"), r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
-                       r"C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe"):
+    for _candidate in (shutil.which("tesseract"), r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                       r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"):
         if _candidate and os.path.isfile(_candidate):
             pytesseract.pytesseract.tesseract_cmd = _candidate
             break
