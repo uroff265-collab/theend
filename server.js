@@ -150,7 +150,7 @@ const taskSelect = `
   SELECT id, title, type, account_id AS "accountId",
          to_char(scheduled_at, 'YYYY-MM-DD"T"HH24:MI') AS "scheduledAt",
          recurrence, enabled, notified_at AS "notifiedAt",
-         last_notified_date AS "lastNotifiedDate"
+         to_char(last_notified_date, 'YYYY-MM-DD') AS "lastNotifiedDate"
   FROM tasks
 `;
 
