@@ -242,6 +242,46 @@ app.delete("/api/tasks/:id", async (req, res) => {
   }
 });
 
+app.get("/api/history", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, title, detail, occurred_at AS "at" FROM task_history ORDER BY occurred_at DESC, id DESC LIMIT 100'
+    );
+    res.json(result.rows.map(item => ({ ...item, id:String(item.id) })));
+  } catch (error) {
+    console.error("Could not load history:", error.message);
+    res.status(500).json({ error: "Не удалось загрузить историю." });
+  }
+});
+
+app.post("/api/history", async (req, res) => {
+  const { title, detail = "" } = req.body || {};
+  if (typeof title !== "string" || !title.trim() || title.length > 160 ||
+      typeof detail !== "string" || detail.length > 2000) {
+    return res.status(400).json({ error: "Проверь название и описание записи истории." });
+  }
+  try {
+    const result = await pool.query(
+      'INSERT INTO task_history (title, detail) VALUES ($1, $2) RETURNING id, title, detail, occurred_at AS "at"',
+      [title.trim(), detail]
+    );
+    res.status(201).json({ ...result.rows[0], id:String(result.rows[0].id) });
+  } catch (error) {
+    console.error("Could not create history entry:", error.message);
+    res.status(500).json({ error: "Не удалось сохранить запись истории." });
+  }
+});
+
+app.delete("/api/history", async (_req, res) => {
+  try {
+    const result = await pool.query("DELETE FROM task_history");
+    res.json({ ok:true, deleted:result.rowCount });
+  } catch (error) {
+    console.error("Could not clear history:", error.message);
+    res.status(500).json({ error: "Не удалось очистить историю." });
+  }
+});
+
 app.get("/", (_req, res) => {
   res.sendFile(require("path").join(__dirname, "index.html"));
 });
