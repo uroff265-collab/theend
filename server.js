@@ -138,7 +138,7 @@ function validTaskInput(body) {
       typeof type !== "string" || !type.trim() || type.length > 80 ||
       !(accountId === null || (Number.isSafeInteger(accountId) && accountId > 0)) ||
       typeof scheduledAt !== "string" ||
-      !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(scheduledAt) ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(scheduledAt) ||
       Number.isNaN(new Date(scheduledAt).getTime()) ||
       !["once", "daily"].includes(recurrence) || typeof enabled !== "boolean") {
     return null;
@@ -202,6 +202,30 @@ app.put("/api/tasks/:id", async (req, res) => {
   } catch (error) {
     console.error("Could not update task:", error.message);
     res.status(500).json({ error: "Не удалось обновить задачу. Проверь выбранный аккаунт." });
+  }
+});
+
+app.patch("/api/tasks/:id/reminder", async (req, res) => {
+  const id = Number(req.params.id);
+  const { notifiedAt, lastNotifiedDate } = req.body || {};
+  const hasNotifiedAt = typeof notifiedAt === "string" && !Number.isNaN(Date.parse(notifiedAt));
+  const hasLastDate = typeof lastNotifiedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(lastNotifiedDate);
+  if (!Number.isSafeInteger(id) || id < 1 || (!hasNotifiedAt && !hasLastDate)) {
+    return res.status(400).json({ error: "Некорректные данные напоминания." });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE tasks SET
+         notified_at = CASE WHEN $2::boolean THEN $3::timestamptz ELSE notified_at END,
+         last_notified_date = CASE WHEN $4::boolean THEN $5::date ELSE last_notified_date END
+       WHERE id=$1 RETURNING id`,
+      [id, hasNotifiedAt, hasNotifiedAt ? notifiedAt : null, hasLastDate, hasLastDate ? lastNotifiedDate : null]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Задача не найдена." });
+    res.json({ ok:true, id:String(id) });
+  } catch (error) {
+    console.error("Could not save reminder state:", error.message);
+    res.status(500).json({ error: "Не удалось сохранить состояние напоминания." });
   }
 });
 
