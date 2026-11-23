@@ -287,11 +287,15 @@ h1 { margin:0 0 8px;font-size:29px; }
   }[ch]));
 
 
-  const readTasks = () => {
-    try { const value = JSON.parse(localStorage.getItem(TASK_KEY) || "[]"); return Array.isArray(value) ? value : []; }
-    catch { return []; }
-  };
-  const saveTasks = value => localStorage.setItem(TASK_KEY, JSON.stringify(value));
+  let tasksCache = [];
+  async function refreshTasks() {
+    const response = await fetch("/api/tasks");
+    if (!response.ok) throw new Error("Не удалось загрузить задачи с сервера.");
+    tasksCache = await response.json();
+    return tasksCache;
+  }
+  const readTasks = () => tasksCache;
+  const saveTasks = value => { tasksCache = value; };
   const readHistory = () => {
     try { const value = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); return Array.isArray(value) ? value : []; }
     catch { return []; }
@@ -316,15 +320,15 @@ h1 { margin:0 0 8px;font-size:29px; }
     const tasks = readTasks();
     if (id === null && tasks.length >= TASK_LIMIT) { alert("Достигнут лимит демо-версии — 20 задач."); return; }
     editingTaskId = id;
-    const task = id === null ? { title:"", type:"Проверка профиля", accountId:"", scheduledAt:"", recurrence:"once", enabled:true } : tasks.find(item => item.id === id);
+    const task = id === null ? { title:"", type:"Проверка профиля", accountId:"", scheduledAt:"", recurrence:"once", enabled:true } : tasks.find(item => String(item.id) === String(id));
     if (!task) return;
     const accountSelect = document.getElementById("taskAccount");
     const accounts = readAccounts();
-    accountSelect.innerHTML = '<option value="">Без привязки к профилю</option>' + accounts.map((a, i) => '<option value="' + i + '">' + esc(a.name) + ' · ' + esc(a.server) + '</option>').join("");
+    accountSelect.innerHTML = '<option value="">Без привязки к профилю</option>' + accounts.map(a => '<option value="' + esc(a.id) + '">' + esc(a.name) + ' · ' + esc(a.server) + '</option>').join("");
     document.getElementById("taskModalTitle").textContent = id === null ? "Новая задача" : "Редактировать задачу";
     document.getElementById("taskName").value = task.title || "";
     document.getElementById("taskType").value = task.type || "Проверка профиля";
-    accountSelect.value = task.accountId === undefined ? "" : String(task.accountId);
+    accountSelect.value = task.accountId === null || task.accountId === undefined ? "" : String(task.accountId);
     document.getElementById("taskDate").value = task.scheduledAt || "";
     document.getElementById("taskRecurrence").value = task.recurrence || "once";
     document.getElementById("taskEnabled").checked = task.enabled !== false;
@@ -344,54 +348,67 @@ h1 { margin:0 0 8px;font-size:29px; }
       <h1>Автоматизация</h1>
       <p class="subtitle">Создавай задачи, связывай их с игровыми профилями и включай или отключай их.</p>
       <section class="hero">
-        <span class="hero-tag">TASK MANAGER · DEMO</span>
+        <span class="hero-tag">TASK MANAGER · DATABASE</span>
         <h2>Управление задачами</h2>
-        <p>Задачи и расписание сохраняются в этом браузере. В демо-версии они не запускают игровые действия автоматически.</p>
+        <p>Задачи и расписание сохраняются на сервере в Neon. Это планировщик напоминаний, а не управление игровым клиентом.</p>
         <div style="display:flex;gap:9px;flex-wrap:wrap"><button class="primary" id="addTask">＋ Создать задачу</button><button class="secondary" id="addDailyPack">Добавить ежедневный набор</button></div>
       </section>
       <section class="stats">
-        <div class="stat"><div class="stat-label">Всего задач</div><div class="stat-value">${tasks.length} / ${TASK_LIMIT}</div><div class="stat-foot">Локальное сохранение</div></div>
+        <div class="stat"><div class="stat-label">Всего задач</div><div class="stat-value">${tasks.length} / ${TASK_LIMIT}</div><div class="stat-foot">Сохранено в Neon</div></div>
         <div class="stat"><div class="stat-label">Включено</div><div class="stat-value">${tasks.filter(t => t.enabled).length}</div><div class="stat-foot">Готовы по расписанию</div></div>
         <div class="stat"><div class="stat-label">Отключено</div><div class="stat-value">${tasks.filter(t => !t.enabled).length}</div><div class="stat-foot">Не отображаются в активном расписании</div></div>
       </section>
       <section class="card">
         <div class="card-title"><h3>Список задач</h3><span class="link">${tasks.length} / ${TASK_LIMIT}</span></div>
         ${tasks.length ? '<div class="task-list">' + tasks.map(t => {
-          const account = t.accountId === "" || t.accountId === undefined ? null : accounts[Number(t.accountId)];
+          const account = t.accountId === null || t.accountId === "" || t.accountId === undefined ? null : accounts.find(a => String(a.id) === String(t.accountId));
           return '<div class="task-row"><span class="task-dot ' + (t.enabled ? '' : 'off') + '"></span><div class="task-main"><strong>' + esc(t.title) + '</strong><small>' + esc(t.type) + ' · ' + esc(account ? account.name : 'Без профиля') + '</small><div class="task-meta">' + (t.recurrence === "daily" ? 'Каждый день · ' + esc((t.scheduledAt || '').slice(11,16)) : 'Один раз · ' + esc(formatDate(t.scheduledAt))) + '</div></div><div class="task-actions"><label class="switch"><input class="task-toggle" type="checkbox" data-id="' + esc(t.id) + '" ' + (t.enabled ? 'checked' : '') + '> Вкл.</label><button class="icon-btn task-edit" data-id="' + esc(t.id) + '" title="Редактировать">✎</button><button class="icon-btn task-delete" data-id="' + esc(t.id) + '" title="Удалить">✕</button></div></div>';
         }).join("") + '</div>' : '<div class="empty"><div class="empty-icon">⚙</div><strong>Задач пока нет</strong><p>Создай первую задачу, чтобы она появилась здесь.</p></div>'}
       </section>
       <div class="footer">THEEND · TASK MANAGER · DEMO</div>`;
     document.getElementById("addTask").onclick = () => openTaskModal();
-    document.getElementById("addDailyPack").onclick = () => {
+    document.getElementById("addDailyPack").onclick = async () => {
       const current = readTasks();
       const presets = [["Сбор ресурсов","09:00"],["Проверка энергии","12:00"],["Проверка строительства","15:00"],["Проверка исследований","18:00"],["Проверка альянса","21:00"]];
       const existing = new Set(current.filter(t => t.recurrence === "daily").map(t => t.title));
-      const additions = presets.filter(p => !existing.has(p[0])).map((p,i) => {
+      const additions = presets.filter(p => !existing.has(p[0])).map(p => {
         const d = new Date(); d.setHours(Number(p[1].slice(0,2)),Number(p[1].slice(3,5)),0,0);
-        return {id:Date.now()+i,title:p[0],type:"Ежедневное напоминание",accountId:"",scheduledAt:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+p[1],recurrence:"daily",enabled:true};
+        return {title:p[0],type:"Ежедневное напоминание",accountId:null,scheduledAt:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+p[1],recurrence:"daily",enabled:true};
       });
       if (current.length + additions.length > TASK_LIMIT) { alert("Не хватает места. Удали лишние задачи и повтори."); return; }
-      saveTasks(current.concat(additions)); logAction("Добавлен ежедневный набор", additions.length+" напоминаний для Last Asylum"); renderAutomation();
+      try {
+        const results = await Promise.all(additions.map(task => fetch("/api/tasks", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(task)})));
+        const failed = results.find(response => !response.ok);
+        if (failed) throw new Error("Не удалось сохранить ежедневный набор.");
+        await refreshTasks();
+        logAction("Добавлен ежедневный набор", additions.length+" напоминаний для Last Asylum");
+        renderAutomation();
+      } catch (error) { alert(error.message || "Ошибка соединения с сервером."); }
     };
-    document.querySelectorAll(".task-edit").forEach(btn => btn.onclick = () => openTaskModal(Number(btn.dataset.id)));
-    document.querySelectorAll(".task-delete").forEach(btn => btn.onclick = () => {
+    document.querySelectorAll(".task-edit").forEach(btn => btn.onclick = () => openTaskModal(btn.dataset.id));
+    document.querySelectorAll(".task-delete").forEach(btn => btn.onclick = async () => {
       if (readSettings().confirmDelete && !confirm("Удалить эту задачу?")) return;
-      const id = Number(btn.dataset.id);
-      const item = readTasks().find(t => t.id === id);
-      saveTasks(readTasks().filter(t => t.id !== id));
-      logAction("Задача удалена", item ? item.title : "");
-      renderAutomation();
+      const id = btn.dataset.id;
+      const item = readTasks().find(t => String(t.id) === String(id));
+      try {
+        const response = await fetch("/api/tasks/" + id, {method:"DELETE"});
+        if (!response.ok) throw new Error("Не удалось удалить задачу.");
+        await refreshTasks();
+        logAction("Задача удалена", item ? item.title : "");
+        renderAutomation();
+      } catch (error) { alert(error.message || "Ошибка соединения с сервером."); }
     });
-    document.querySelectorAll(".task-toggle").forEach(input => input.onchange = () => {
-      const id = Number(input.dataset.id);
-      const tasksNow = readTasks();
-      const item = tasksNow.find(t => t.id === id);
+    document.querySelectorAll(".task-toggle").forEach(input => input.onchange = async () => {
+      const id = input.dataset.id;
+      const item = readTasks().find(t => String(t.id) === String(id));
       if (!item) return;
-      item.enabled = input.checked;
-      saveTasks(tasksNow);
-      logAction(input.checked ? "Задача включена" : "Задача отключена", item.title);
-      renderAutomation();
+      try {
+        const response = await fetch("/api/tasks/" + id, {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({...item,enabled:input.checked})});
+        if (!response.ok) throw new Error("Не удалось изменить задачу.");
+        await refreshTasks();
+        logAction(input.checked ? "Задача включена" : "Задача отключена", item.title);
+        renderAutomation();
+      } catch (error) { input.checked = !input.checked; alert(error.message || "Ошибка соединения с сервером."); }
     });
   }
   function renderSchedule() {
@@ -639,29 +656,33 @@ h1 { margin:0 0 8px;font-size:29px; }
 
   document.getElementById("cancelTaskModal").onclick = closeTaskModal;
   taskModal.addEventListener("click", e => { if (e.target === taskModal) closeTaskModal(); });
-  taskForm.addEventListener("submit", e => {
+  taskForm.addEventListener("submit", async e => {
     e.preventDefault();
     const title = document.getElementById("taskName").value.trim();
     const type = document.getElementById("taskType").value;
-    const accountId = document.getElementById("taskAccount").value;
+    const accountValue = document.getElementById("taskAccount").value;
+    const accountId = accountValue ? Number(accountValue) : null;
     const scheduledAt = document.getElementById("taskDate").value;
     const recurrence = document.getElementById("taskRecurrence").value;
     const enabled = document.getElementById("taskEnabled").checked;
     if (!title || !scheduledAt || Number.isNaN(new Date(scheduledAt).getTime())) return;
-    const tasks = readTasks();
     const isNew = editingTaskId === null;
-    const previous = tasks.find(t => t.id === editingTaskId);
-    const item = { id:isNew ? Date.now() : editingTaskId, title, type, accountId, scheduledAt, recurrence, enabled, notifiedAt:isNew ? "" : (previous?.notifiedAt || ""), lastNotifiedDate:isNew ? "" : (previous?.lastNotifiedDate || "") };
-    if (isNew) tasks.push(item);
-    else {
-      const index = tasks.findIndex(t => t.id === editingTaskId);
-      if (index < 0) return;
-      tasks[index] = item;
-    }
-    saveTasks(tasks);
-    logAction(isNew ? "Задача создана" : "Задача изменена", title);
-    closeTaskModal();
-    renderAutomation();
+    const existing = isNew ? null : readTasks().find(t => String(t.id) === String(editingTaskId));
+    if (!isNew && !existing) { alert("Задача не найдена. Обнови страницу."); return; }
+    const payload = {title,type,accountId,scheduledAt,recurrence,enabled};
+    try {
+      const response = await fetch(isNew ? "/api/tasks" : "/api/tasks/" + editingTaskId, {
+        method:isNew ? "POST" : "PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Не удалось сохранить задачу.");
+      await refreshTasks();
+      logAction(isNew ? "Задача создана" : "Задача изменена", title);
+      closeTaskModal();
+      renderAutomation();
+    } catch (error) { alert(error.message || "Ошибка соединения с сервером."); }
   });
 
   function checkTaskReminders() {
@@ -691,6 +712,7 @@ h1 { margin:0 0 8px;font-size:29px; }
   setInterval(checkTaskReminders,30000);
   try {
     await refreshAccounts();
+    await refreshTasks();
     showPage("home");
   } catch (error) {
     main.innerHTML = `<section class="card"><h2>Нет связи с TheEnd API</h2><p class="subtitle">${esc(error.message)}</p><button class="primary" id="retryApi">Повторить подключение</button></section>`;
