@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """TheEnd Agent: Android ADB heartbeat and limited tap-command runner."""
 import getpass
+import base64
 import json
 import os
 import platform
@@ -105,6 +106,16 @@ def heartbeat(connected):
     )
 
 
+def upload_screenshot():
+    result = subprocess.run(
+        [ADB, "-s", ADB_SERIAL, "exec-out", "screencap", "-p"],
+        capture_output=True, timeout=12, check=True
+    )
+    encoded = base64.b64encode(result.stdout).decode("ascii")
+    request_json("/api/agent/screenshot", {"image": encoded})
+    print(time.strftime("%H:%M:%S"), "Снимок экрана отправлен в TheEnd.")
+
+
 def run_one_command():
     try:
         response = request_json("/api/agent/commands/next")
@@ -154,6 +165,7 @@ def main():
     print("Не закрывайте это окно PowerShell.")
 
     last_heartbeat = 0
+    last_screenshot = 0
     while True:
         connected = emulator_connected()
         now = time.time()
@@ -172,6 +184,12 @@ def main():
             last_heartbeat = now
 
         if connected:
+            if now - last_screenshot >= 10:
+                try:
+                    upload_screenshot()
+                except Exception as error:
+                    print("Не удалось отправить снимок экрана:", error)
+                last_screenshot = now
             run_one_command()
         time.sleep(2)
 
