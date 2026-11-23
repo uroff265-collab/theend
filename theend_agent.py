@@ -55,7 +55,67 @@ def get_token():
 TOKEN = None
 
 
-def adb(*args, timeout=8):
+
+# Optional OCR engine. Install with: py -m pip install pytesseract pillow
+try:
+    import pytesseract
+    from PIL import Image
+    import io
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
+if OCR_AVAILABLE:
+    for _candidate in (shutil.which("tesseract"), r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+                       r"C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe"):
+        if _candidate and os.path.isfile(_candidate):
+            pytesseract.pytesseract.tesseract_cmd = _candidate
+            break
+
+
+def capture_screen_png():
+    """Capture emulator screen locally; never uploads it."""
+    result = subprocess.run([ADB, "-s", ADB_SERIAL, "exec-out", "screencap", "-p"],
+                            capture_output=True, timeout=15, check=True)
+    if not result.stdout.startswith(b"\\x89PNG"):
+        raise RuntimeError("ADB вернул некорректный снимок экрана")
+    return result.stdout
+
+
+def ocr_game_screen(png_bytes):
+    if not OCR_AVAILABLE:
+        raise RuntimeError("OCR-библиотеки не установлены. Выполните: py -m pip install pytesseract pillow")
+    try:
+        image_obj = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+        data = pytesseract.image_to_data(image_obj, lang="eng+rus", config="--psm 11",
+                                         output_type=pytesseract.Output.DICT)
+    except pytesseract.pytesseract.TesseractNotFoundError:
+        raise RuntimeError("Не найден Tesseract OCR. Установите Tesseract OCR для Windows.")
+    words = []
+    for i, raw in enumerate(data.get("text", [])):
+        label = re.sub(r"\\s+", " ", raw).strip()
+        try:
+            confidence = float(data["conf"][i])
+            x, y = int(data["left"][i]), int(data["top"][i])
+            w, h = int(data["width"][i]), int(data["height"][i])
+        except (ValueError, TypeError, KeyError):
+            continue
+        if label and confidence >= 65 and w > 0 and h > 0:
+            words.append((label, x + w // 2, y + h // 2, confidence))
+    return words
+
+
+def find_ocr_collection_action(words):
+    allowed = {"collect", "collect all", "claim", "claim all", "gather", "collect reward", "claim reward",
+               "собрать", "собрать всё", "собрать все", "получить", "забрать", "забрать всё",
+               "забрать все", "получить награду", "забрать награду", "получить всё", "получить все"}
+    for label, x, y, confidence in words:
+        normalized = re.sub(r"\\s+", " ", label.casefold()).strip(" .,:;!?")
+        if normalized in allowed:
+            return label, x, y, confidence
+    return None
+
+\ndef adb(*args, timeout=8):
     return subprocess.run(
         [ADB, "-s", ADB_SERIAL, *args],
         capture_output=True, text=True, timeout=timeout, check=True
@@ -228,17 +288,30 @@ def main():
                     action = find_safe_game_action(nodes)
                     if action:
                         label, x, y = action
-                        action_key = f"{label}:{x}:{y}"
+                        action_key = f"a11y:{label}:{x}:{y}"
                         if action_key != last_action_key or now - last_action_at >= 45:
                             adb("shell", "input", "tap", str(x), str(y))
-                            print(time.strftime("%H:%M:%S"), f"Автодействие: {label} ({x},{y})")
-                            last_action_key = action_key
-                            last_action_at = now
-                    elif not nodes:
-                        print(time.strftime("%H:%M:%S"), "Сканирование: текстовых элементов не найдено. Возможно, интерфейс игры нарисован графически.")
+                            print(time.strftime("%H:%M:%S"), f"Автодействие (Android UI): {label} ({x},{y})")
+                            last_action_key, last_action_at = action_key, now
                     else:
-                        labels = [label for label, _, _ in nodes[:8]]
-                        print(time.strftime("%H:%M:%S"), f"Сканирование: найдено элементов {len(nodes)}; подписи: " + " | ".join(labels))
+                        if nodes:
+                            labels = [label for label, _, _ in nodes[:5]]
+                            print(time.strftime("%H:%M:%S"), "Android UI:", " | ".join(labels))
+                        png = capture_screen_png()
+                        words = ocr_game_screen(png)
+                        ocr_action = find_ocr_collection_action(words)
+                        if ocr_action:
+                            label, x, y, confidence = ocr_action
+                            action_key = f"ocr:{label}:{x}:{y}"
+                            if action_key != last_action_key or now - last_action_at >= 45:
+                                adb("shell", "input", "tap", str(x), str(y))
+                                print(time.strftime("%H:%M:%S"), f"Автодействие (OCR {confidence:.0f}%): {label} ({x},{y})")
+                                last_action_key, last_action_at = action_key, now
+                        elif words:
+                            preview = [w[0] for w in words[:12]]
+                            print(time.strftime("%H:%M:%S"), f"OCR: распознано {len(words)} слов: " + " | ".join(preview))
+                        else:
+                            print(time.strftime("%H:%M:%S"), "OCR: текст на экране не распознан; снимок остаётся на компьютере.")
                 except Exception as error:
                     print("Ошибка анализа игрового интерфейса:", error)
                 last_ui_scan = now
