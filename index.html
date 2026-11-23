@@ -238,8 +238,12 @@ h1 { margin:0 0 8px;font-size:29px; }
         <select id="taskAccount"></select>
       </div>
       <div class="field">
-        <label for="taskDate">Дата и время</label>
+        <label for="taskDate">Дата и время (для ежедневной задачи используется время)</label>
         <input id="taskDate" type="datetime-local" required>
+      </div>
+      <div class="field">
+        <label for="taskRecurrence">Повторение</label>
+        <select id="taskRecurrence"><option value="once">Один раз</option><option value="daily">Каждый день</option></select>
       </div>
       <div class="field">
         <label><input id="taskEnabled" type="checkbox" checked style="width:auto;margin-right:7px;accent-color:var(--purple)"> Задача включена</label>
@@ -313,7 +317,7 @@ h1 { margin:0 0 8px;font-size:29px; }
     const tasks = readTasks();
     if (id === null && tasks.length >= TASK_LIMIT) { alert("Достигнут лимит демо-версии — 20 задач."); return; }
     editingTaskId = id;
-    const task = id === null ? { title:"", type:"Проверка профиля", accountId:"", scheduledAt:"", enabled:true } : tasks.find(item => item.id === id);
+    const task = id === null ? { title:"", type:"Проверка профиля", accountId:"", scheduledAt:"", recurrence:"once", enabled:true } : tasks.find(item => item.id === id);
     if (!task) return;
     const accountSelect = document.getElementById("taskAccount");
     const accounts = readAccounts();
@@ -323,6 +327,7 @@ h1 { margin:0 0 8px;font-size:29px; }
     document.getElementById("taskType").value = task.type || "Проверка профиля";
     accountSelect.value = task.accountId === undefined ? "" : String(task.accountId);
     document.getElementById("taskDate").value = task.scheduledAt || "";
+    document.getElementById("taskRecurrence").value = task.recurrence || "once";
     document.getElementById("taskEnabled").checked = task.enabled !== false;
     taskModal.classList.add("open");
     document.getElementById("taskName").focus();
@@ -343,7 +348,7 @@ h1 { margin:0 0 8px;font-size:29px; }
         <span class="hero-tag">TASK MANAGER · DEMO</span>
         <h2>Управление задачами</h2>
         <p>Задачи и расписание сохраняются в этом браузере. В демо-версии они не запускают игровые действия автоматически.</p>
-        <button class="primary" id="addTask">＋ Создать задачу</button>
+        <div style="display:flex;gap:9px;flex-wrap:wrap"><button class="primary" id="addTask">＋ Создать задачу</button><button class="secondary" id="addDailyPack">Добавить ежедневный набор</button></div>
       </section>
       <section class="stats">
         <div class="stat"><div class="stat-label">Всего задач</div><div class="stat-value">${tasks.length} / ${TASK_LIMIT}</div><div class="stat-foot">Локальное сохранение</div></div>
@@ -354,11 +359,22 @@ h1 { margin:0 0 8px;font-size:29px; }
         <div class="card-title"><h3>Список задач</h3><span class="link">${tasks.length} / ${TASK_LIMIT}</span></div>
         ${tasks.length ? '<div class="task-list">' + tasks.map(t => {
           const account = t.accountId === "" || t.accountId === undefined ? null : accounts[Number(t.accountId)];
-          return '<div class="task-row"><span class="task-dot ' + (t.enabled ? '' : 'off') + '"></span><div class="task-main"><strong>' + esc(t.title) + '</strong><small>' + esc(t.type) + ' · ' + esc(account ? account.name : 'Без профиля') + '</small><div class="task-meta">Запланировано: ' + esc(formatDate(t.scheduledAt)) + '</div></div><div class="task-actions"><label class="switch"><input class="task-toggle" type="checkbox" data-id="' + esc(t.id) + '" ' + (t.enabled ? 'checked' : '') + '> Вкл.</label><button class="icon-btn task-edit" data-id="' + esc(t.id) + '" title="Редактировать">✎</button><button class="icon-btn task-delete" data-id="' + esc(t.id) + '" title="Удалить">✕</button></div></div>';
+          return '<div class="task-row"><span class="task-dot ' + (t.enabled ? '' : 'off') + '"></span><div class="task-main"><strong>' + esc(t.title) + '</strong><small>' + esc(t.type) + ' · ' + esc(account ? account.name : 'Без профиля') + '</small><div class="task-meta">' + (t.recurrence === "daily" ? 'Каждый день · ' + esc((t.scheduledAt || '').slice(11,16)) : 'Один раз · ' + esc(formatDate(t.scheduledAt))) + '</div></div><div class="task-actions"><label class="switch"><input class="task-toggle" type="checkbox" data-id="' + esc(t.id) + '" ' + (t.enabled ? 'checked' : '') + '> Вкл.</label><button class="icon-btn task-edit" data-id="' + esc(t.id) + '" title="Редактировать">✎</button><button class="icon-btn task-delete" data-id="' + esc(t.id) + '" title="Удалить">✕</button></div></div>';
         }).join("") + '</div>' : '<div class="empty"><div class="empty-icon">⚙</div><strong>Задач пока нет</strong><p>Создай первую задачу, чтобы она появилась здесь.</p></div>'}
       </section>
       <div class="footer">THEEND · TASK MANAGER · DEMO</div>`;
     document.getElementById("addTask").onclick = () => openTaskModal();
+    document.getElementById("addDailyPack").onclick = () => {
+      const current = readTasks();
+      const presets = [["Сбор ресурсов","09:00"],["Проверка энергии","12:00"],["Проверка строительства","15:00"],["Проверка исследований","18:00"],["Проверка альянса","21:00"]];
+      const existing = new Set(current.filter(t => t.recurrence === "daily").map(t => t.title));
+      const additions = presets.filter(p => !existing.has(p[0])).map((p,i) => {
+        const d = new Date(); d.setHours(Number(p[1].slice(0,2)),Number(p[1].slice(3,5)),0,0);
+        return {id:Date.now()+i,title:p[0],type:"Ежедневное напоминание",accountId:"",scheduledAt:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+p[1],recurrence:"daily",enabled:true};
+      });
+      if (current.length + additions.length > TASK_LIMIT) { alert("Не хватает места. Удали лишние задачи и повтори."); return; }
+      saveTasks(current.concat(additions)); logAction("Добавлен ежедневный набор", additions.length+" напоминаний для Last Asylum"); renderAutomation();
+    };
     document.querySelectorAll(".task-edit").forEach(btn => btn.onclick = () => openTaskModal(Number(btn.dataset.id)));
     document.querySelectorAll(".task-delete").forEach(btn => btn.onclick = () => {
       if (readSettings().confirmDelete && !confirm("Удалить эту задачу?")) return;
@@ -420,9 +436,18 @@ h1 { margin:0 0 8px;font-size:29px; }
         <div class="card-title"><h3>Поведение панели</h3></div>
         <div class="setting-row"><div><strong>Подтверждать удаление</strong><small>Запрашивать подтверждение перед удалением задачи или профиля.</small></div><input id="confirmDeleteSetting" type="checkbox" style="accent-color:var(--purple);width:18px;height:18px" ${settings.confirmDelete !== false ? "checked" : ""}></div>
         <div class="setting-row"><div><strong>Локальное хранилище</strong><small>Профили: ${accountCount} · Задачи: ${taskCount} · Данные доступны только в этом браузере.</small></div><span class="badge">Активно</span></div>
-        <div class="setting-row"><div><strong>Режим работы</strong><small>Игровые действия и фоновые автоматизации не подключены.</small></div><span class="badge demo">DEMO</span></div>
+        <div class="setting-row"><div><strong>Уведомления браузера</strong><small>Напоминания приходят, пока TheEnd открыт в браузере. При закрытой вкладке нужен отдельный сервер.</small></div><button class="secondary" id="enableNotifications">Разрешить</button></div>
+        <div class="setting-row"><div><strong>Режим работы</strong><small>Планировщик напоминает о задачах, но не управляет игровым клиентом.</small></div><span class="badge demo">ПЛАНИРОВЩИК</span></div>
       </section>
       <div class="footer">THEEND DASHBOARD · SETTINGS</div>`;
+    const notifyButton = document.getElementById("enableNotifications");
+    notifyButton.textContent = ("Notification" in window && Notification.permission === "granted") ? "Разрешено" : "Разрешить";
+    notifyButton.onclick = async () => {
+      if (!("Notification" in window)) { alert("Этот браузер не поддерживает уведомления."); return; }
+      const permission = await Notification.requestPermission();
+      notifyButton.textContent = permission === "granted" ? "Разрешено" : "Не разрешено";
+      if (permission === "granted") new Notification("TheEnd", {body:"Уведомления включены."});
+    };
     document.getElementById("confirmDeleteSetting").onchange = e => {
       saveSettings({ ...readSettings(), confirmDelete:e.target.checked });
       logAction("Настройки обновлены", "Подтверждение удаления: " + (e.target.checked ? "включено" : "выключено"));
@@ -602,11 +627,13 @@ h1 { margin:0 0 8px;font-size:29px; }
     const type = document.getElementById("taskType").value;
     const accountId = document.getElementById("taskAccount").value;
     const scheduledAt = document.getElementById("taskDate").value;
+    const recurrence = document.getElementById("taskRecurrence").value;
     const enabled = document.getElementById("taskEnabled").checked;
     if (!title || !scheduledAt || Number.isNaN(new Date(scheduledAt).getTime())) return;
     const tasks = readTasks();
     const isNew = editingTaskId === null;
-    const item = { id:isNew ? Date.now() : editingTaskId, title, type, accountId, scheduledAt, enabled };
+    const previous = tasks.find(t => t.id === editingTaskId);
+    const item = { id:isNew ? Date.now() : editingTaskId, title, type, accountId, scheduledAt, recurrence, enabled, notifiedAt:isNew ? "" : (previous?.notifiedAt || ""), lastNotifiedDate:isNew ? "" : (previous?.lastNotifiedDate || "") };
     if (isNew) tasks.push(item);
     else {
       const index = tasks.findIndex(t => t.id === editingTaskId);
@@ -619,6 +646,31 @@ h1 { margin:0 0 8px;font-size:29px; }
     renderAutomation();
   });
 
+  function checkTaskReminders() {
+    const now = new Date();
+    const today = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+    const tasks = readTasks(); let changed = false;
+    tasks.forEach(task => {
+      if (!task.enabled) return;
+      let due = false;
+      if (task.recurrence === "daily") {
+        const time = (task.scheduledAt || "").slice(11,16);
+        const nowTime = String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+        due = !!time && nowTime >= time && task.lastNotifiedDate !== today;
+      } else due = !!task.scheduledAt && new Date(task.scheduledAt).getTime() <= now.getTime() && !task.notifiedAt;
+      if (!due) return;
+      if ("Notification" in window && Notification.permission === "granted") {
+        try { new Notification("TheEnd — напоминание", {body:task.title+" · Last Asylum",tag:"theend-task-"+task.id}); } catch {}
+      }
+      logAction("Напоминание отправлено", task.title);
+      if (task.recurrence === "daily") task.lastNotifiedDate = today;
+      else task.notifiedAt = now.toISOString();
+      changed = true;
+    });
+    if (changed) saveTasks(tasks);
+  }
+  checkTaskReminders();
+  setInterval(checkTaskReminders,30000);
   showPage("home");
 })();
 </script>
