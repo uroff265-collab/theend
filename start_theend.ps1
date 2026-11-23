@@ -20,6 +20,8 @@ try {
 $Agent = Join-Path $Folder "theend_agent.py"
 Write-Host "Обновляю агент из GitHub..."
 Invoke-WebRequest "$Repo/theend_agent.py" -OutFile $Agent
+$Vision = Join-Path $Folder "theend_vision.py"
+Invoke-WebRequest "$Repo/theend_vision.py" -OutFile $Vision
 
 $Adb = if (Test-Path "C:\platform-tools\adb.exe") { "C:\platform-tools\adb.exe" } else { "adb" }
 Write-Host "Проверяю ADB..."
