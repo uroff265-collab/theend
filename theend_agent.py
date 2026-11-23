@@ -276,6 +276,47 @@ def run_semantic_modules(activities):
         except Exception as e:
             print(time.strftime("%H:%M:%S"),"Модуль",spec["label"],"пропущен:",e)
 
+GAME_MEMORY_PATH=os.path.join(os.path.dirname(os.path.abspath(__file__)),"theend_game_memory.json")
+
+def learn_screen():
+    # Persist only extracted UI labels and relative control positions, never image pixels.
+    try:
+        nodes=read_ui_nodes()
+        png=screen_png()
+        words=recognize(png)
+        im=Image.open(io.BytesIO(png))
+        width,height=im.size
+        labels=sorted(set(n["label"] for n in nodes))
+        if not labels:
+            labels=sorted(set(norm(w["text"]) for w in words if w["conf"]>=75))
+        if not labels: return 0
+        signature="|".join(labels[:80])
+        try:
+            with open(GAME_MEMORY_PATH,"r",encoding="utf-8") as f: memory=json.load(f)
+            if not isinstance(memory,dict): memory={}
+        except (OSError,ValueError): memory={}
+        screens=memory.setdefault("screens",{})
+        entry=screens.get(signature,{"firstSeen":int(time.time()),"visits":0,"labels":labels,"controls":[]})
+        entry["visits"]=int(entry.get("visits",0))+1
+        entry["lastSeen"]=int(time.time())
+        entry["resolution"]=[width,height]
+        entry["controls"]=[{"label":n["label"],"x":round(n["x"]/width,4),"y":round(n["y"]/height,4),
+                            "clickable":n["clickable"],"enabled":n["enabled"]}
+                           for n in nodes if n["clickable"]]
+        screens[signature]=entry
+        memory["updatedAt"]=int(time.time())
+        # Keep the local knowledge base bounded.
+        if len(screens)>300:
+            ordered=sorted(screens.items(),key=lambda pair:pair[1].get("lastSeen",0),reverse=True)
+            memory["screens"]=dict(ordered[:300])
+        temp=GAME_MEMORY_PATH+".tmp"
+        with open(temp,"w",encoding="utf-8") as f: json.dump(memory,f,ensure_ascii=False)
+        os.replace(temp,GAME_MEMORY_PATH)
+        return len(screens)
+    except Exception as e:
+        print("Обучение экрана:",e)
+        return 0
+
 def heartbeat(is_connected):
     api("/api/agent/heartbeat",{"deviceName":DEVICE,"emulatorConnected":is_connected})
 
@@ -388,6 +429,9 @@ def main():
                 last_config_poll=now
             if now-last_scan>=SCAN_SECONDS:
                 try:
+                    known_screens=learn_screen()
+                    if known_screens:
+                        print(time.strftime("%H:%M:%S"),"Память игры:",known_screens,"изученных экранов")
                     if activities.get("town_production") is True:
                         png=screen_png()
                         words=recognize(png)
