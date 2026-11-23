@@ -206,7 +206,7 @@ def read_ui_nodes():
             label=(text_value+" "+desc).strip()
             if not label: continue
             bounds=node.attrib.get("bounds","")
-            match=re.fullmatch(r"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]",bounds)
+            match=re.fullmatch(r"\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]",bounds)
             if not match: continue
             x1,y1,x2,y2=map(int,match.groups())
             nodes.append({"label":label,"x":(x1+x2)//2,"y":(y1+y2)//2,
