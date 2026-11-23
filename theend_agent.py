@@ -158,14 +158,15 @@ def find_collection(png, words):
         green=np.mean((center_hsv[:,0]>=25)&(center_hsv[:,0]<=100)&
                       (center_hsv[:,1]>55)&(center_hsv[:,2]>65))
         if white<0.42 or green<0.10: continue
-        # In the public game UI, the amount is printed immediately beneath
-        # the floating production bubble. Require a nearby numeric OCR token.
-        near=[z for z in numeric if abs(z["x"]-cx)<rad*1.25
-              and rad*0.45 < z["y"]-cy < rad*2.4]
-        if not near: continue
-        amount=min(near,key=lambda z:abs(z["x"]-cx)+abs(z["y"]-(cy+rad*1.25)))
-        candidates.append({"text":"production bubble "+amount["text"],
-                           "x":int(cx),"y":int(cy),"conf":float(amount["conf"])})
+        # Amount OCR is unreliable on small floating labels in this game's
+        # isometric map. The distinctive green leaf inside a pale bubble is
+        # the primary signal; nearby amount is optional metadata, not a gate.
+        near=[z for z in numeric if abs(z["x"]-cx)<rad*1.5
+              and rad*0.35 < z["y"]-cy < rad*2.8]
+        amount=min(near,key=lambda z:abs(z["x"]-cx)+abs(z["y"]-(cy+rad*1.2))) if near else None
+        label=("production bubble "+amount["text"]) if amount else "green resource bubble"
+        confidence=float(amount["conf"]) if amount else float(green*100)
+        candidates.append({"text":label,"x":int(cx),"y":int(cy),"conf":confidence})
     if not candidates: return None
     return max(candidates,key=lambda z:z["conf"])
 
@@ -393,14 +394,31 @@ def execute_task(instruction, activities):
     for key in selected:
         if key=="town_production":
             try:
-                png=screen_png()
-                words=recognize(png)
-                action=find_collection(png,words)
-                if action:
-                    tap(action["x"],action["y"])
-                    completed.append("нажал распознанный пузырь производства")
-                else:
-                    pending.append("пузырь сбора ресурсов не найден на текущем экране")
+                collected=0
+                seen=set()
+                for _ in range(12):
+                    png=screen_png()
+                    words=recognize(png)
+                    action=find_collection(png,words)
+                    if not action: break
+                    point=(action["x"],action["y"])
+                    if point in seen: break
+                    seen.add(point)
+                    tap(*point)
+                    time.sleep(1.0)
+                    after_png=screen_png()
+                    after_words=recognize(after_png)
+                    still_there=find_collection(after_png,after_words)
+                    # Continue if the target changed/disappeared; otherwise stop
+                    # to avoid repeatedly tapping the same unresponsive control.
+                    if still_there and (still_there["x"],still_there["y"])==point:
+                        pending.append("пузырь по координатам "+str(point)+" не исчез после нажатия")
+                        break
+                    collected+=1
+                if collected:
+                    completed.append("собрано пузырей производства: "+str(collected))
+                elif not pending:
+                    pending.append("зелёные пузыри сбора не найдены на текущем экране")
             except Exception as e:
                 pending.append("ошибка анализа производства: "+str(e)[:180])
         else:
