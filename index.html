@@ -257,7 +257,7 @@ h1 { margin:0 0 8px;font-size:29px; }
 </div>
 
 <script>
-(() => {
+(async () => {
   const main = document.getElementById("main");
   const nav = document.querySelectorAll(".nav-btn");
   const modal = document.getElementById("modalBackdrop");
@@ -274,15 +274,14 @@ h1 { margin:0 0 8px;font-size:29px; }
   let editingIndex = null;
   let currentPage = "home";
 
-  const readAccounts = () => {
-    try {
-      const data = JSON.parse(localStorage.getItem(KEY) || "[]");
-      return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
-    }
-  };
-  const saveAccounts = data => localStorage.setItem(KEY, JSON.stringify(data));
+  let accountsCache = [];
+  async function refreshAccounts() {
+    const response = await fetch("/api/accounts");
+    if (!response.ok) throw new Error("Не удалось загрузить аккаунты с сервера.");
+    accountsCache = await response.json();
+    return accountsCache;
+  }
+  const readAccounts = () => accountsCache;
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[ch]));
@@ -543,14 +542,20 @@ h1 { margin:0 0 8px;font-size:29px; }
     });
 
     document.querySelectorAll(".delete-btn").forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const index = Number(btn.dataset.index);
+        const account = readAccounts()[index];
+        if (!account) return;
         if (readSettings().confirmDelete && !confirm("Удалить этот профиль?")) return;
-        const data = readAccounts();
-        data.splice(index, 1);
-        saveAccounts(data);
-        logAction("Профиль удалён", "Профиль из списка аккаунтов");
-        renderAccounts();
+        try {
+          const response = await fetch("/api/accounts/" + account.id, { method:"DELETE" });
+          if (!response.ok) throw new Error("Не удалось удалить аккаунт.");
+          await refreshAccounts();
+          logAction("Профиль удалён", account.name);
+          renderAccounts();
+        } catch (error) {
+          alert(error.message || "Ошибка соединения с сервером.");
+        }
       };
     });
   }
@@ -600,22 +605,35 @@ h1 { margin:0 0 8px;font-size:29px; }
     if (e.key === "Escape") closeModal();
   });
 
-  form.addEventListener("submit", e => {
+  form.addEventListener("submit", async e => {
     e.preventDefault();
     const name = document.getElementById("accName").value.trim();
     const uid = document.getElementById("accUid").value.trim();
-    const server = document.getElementById("accServer").value.trim();
+    const serverName = document.getElementById("accServer").value.trim();
     const status = document.getElementById("accStatus").value;
-    if (!name || !uid || !server) return;
+    if (!name || !uid || !serverName) return;
 
-    const data = readAccounts();
-    const item = {name,uid,server,status};
-    if (editingIndex === null) data.push(item);
-    else data[editingIndex] = item;
-    saveAccounts(data);
-    logAction(editingIndex === null ? "Профиль добавлен" : "Профиль изменён", name);
-    closeModal();
-    renderAccounts();
+    const isNew = editingIndex === null;
+    const account = isNew ? null : readAccounts()[editingIndex];
+    if (!isNew && !account) {
+      alert("Аккаунт не найден. Обнови страницу и попробуй снова.");
+      return;
+    }
+    try {
+      const response = await fetch(isNew ? "/api/accounts" : "/api/accounts/" + account.id, {
+        method: isNew ? "POST" : "PUT",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ name, uid, server:serverName, status })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Не удалось сохранить аккаунт.");
+      await refreshAccounts();
+      logAction(isNew ? "Профиль добавлен" : "Профиль изменён", name);
+      closeModal();
+      renderAccounts();
+    } catch (error) {
+      alert(error.message || "Ошибка соединения с сервером.");
+    }
   });
 
 
@@ -671,7 +689,16 @@ h1 { margin:0 0 8px;font-size:29px; }
   }
   checkTaskReminders();
   setInterval(checkTaskReminders,30000);
-  showPage("home");
+  try {
+    await refreshAccounts();
+    showPage("home");
+  } catch (error) {
+    main.innerHTML = `<section class="card"><h2>Нет связи с TheEnd API</h2><p class="subtitle">${esc(error.message)}</p><button class="primary" id="retryApi">Повторить подключение</button></section>`;
+    document.getElementById("retryApi").onclick = async () => {
+      try { await refreshAccounts(); showPage(currentPage); }
+      catch (retryError) { alert(retryError.message || "Сервер пока недоступен."); }
+    };
+  }
 })();
 </script>
 </body>
