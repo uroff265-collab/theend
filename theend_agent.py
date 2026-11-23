@@ -281,8 +281,10 @@ def find_semantic_ocr_target(activities):
             return key,spec,candidates[0]
     return None
 
+LAST_SEMANTIC_SCREEN={}
+
 def run_semantic_modules(activities):
-    """Execute only a unique, context-confirmed clickable accessibility target."""
+    """Execute at most once per unchanged screen for each enabled activity."""
     outcomes=[]
     try:
         adb("shell","uiautomator","dump","/sdcard/theend-window.xml",timeout=12)
@@ -291,8 +293,11 @@ def run_semantic_modules(activities):
     except Exception as e:
         print("Семантические модули: дерево интерфейса недоступно; нажатий нет:",str(e)[:160])
         return outcomes
+    signature=tuple((n.label,n.bounds,n.clickable,n.enabled) for n in nodes)
     for key,spec in SEMANTIC_MODULES.items():
         if activities.get(key) is not True: continue
+        if LAST_SEMANTIC_SCREEN.get(key)==signature:
+            continue
         target,reason=choose_action(key,nodes)
         if target is None:
             outcomes.append((key,False,"Безопасная цель не подтверждена: "+reason))
@@ -300,12 +305,13 @@ def run_semantic_modules(activities):
         try:
             x,y=target.center
             tap(x,y)
+            LAST_SEMANTIC_SCREEN[key]=signature
             print(time.strftime("%H:%M:%S"),"Модуль:",spec["label"],"— точная кнопка:",target.label)
             time.sleep(1.5)
             adb("shell","uiautomator","dump","/sdcard/theend-window.xml",timeout=12)
             after=parse_hierarchy(adb("shell","cat","/sdcard/theend-window.xml",timeout=8))
             changed=[(n.label,n.bounds,n.enabled) for n in nodes] != [(n.label,n.bounds,n.enabled) for n in after]
-            detail="Интерфейс изменился; результат игры не подтверждён." if changed else "Интерфейс не изменился; повторного нажатия не будет."
+            detail="ui_changed_result_unconfirmed" if changed else "Интерфейс не изменился; повторное нажатие на этом экране заблокировано."
             outcomes.append((key,changed,detail))
         except Exception as e:
             outcomes.append((key,False,"Ошибка выполнения: "+str(e)[:160]))
