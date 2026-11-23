@@ -43,7 +43,7 @@ def run_one_command():
             if command.get("type") != "tap":
                 raise ValueError("Unsupported command")
             size_text = adb("shell", "wm", "size").stdout
-            match = re.search(r"(?:Physical|Override) size:\\s*(\\d+)x(\\d+)", size_text)
+            match = re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)", size_text)
             if not match:
                 raise RuntimeError("Could not read emulator screen size")
             width, height = int(match.group(1)), int(match.group(2))
