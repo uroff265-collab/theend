@@ -168,6 +168,79 @@ def tap(x,y):
     if not (0<=x<width and 0<=y<height): raise ValueError("Координаты вне экрана.")
     adb("shell","input","tap",str(x),str(y))
 
+# Conservative semantic automation: only click a unique, clickable Android UI node
+# when the matching activity title and a safe action label are both visible.
+SEMANTIC_MODULES = {
+    "exploration_camp": {
+        "context": ("лагерь разведки", "exploration camp"),
+        "actions": ("забрать", "получить", "claim", "collect"),
+        "label": "Лагерь разведки"
+    },
+    "sanctuary": {
+        "context": ("святилище", "sanctuary"),
+        "actions": ("собрать", "получить", "collect", "claim"),
+        "label": "Святилище"
+    },
+    "alliance_help": {
+        "context": ("помощь альянсу", "alliance help"),
+        "actions": ("помочь всем", "помочь", "help all", "help"),
+        "label": "Помощь альянсу"
+    },
+    "golden_eggs": {
+        "context": ("золотые яйца", "golden eggs"),
+        "actions": ("забрать", "получить", "claim", "collect"),
+        "label": "Золотые яйца"
+    }
+}
+
+def read_ui_nodes():
+    # Android accessibility hierarchy is read directly; no screenshot is saved.
+    try:
+        adb("shell", "uiautomator", "dump", "/sdcard/theend-window.xml", timeout=12)
+        raw=adb("shell", "cat", "/sdcard/theend-window.xml", timeout=8)
+        root=ET.fromstring(raw)
+        nodes=[]
+        for node in root.iter("node"):
+            text_value=norm(node.attrib.get("text",""))
+            desc=norm(node.attrib.get("content-desc",""))
+            label=(text_value+" "+desc).strip()
+            if not label: continue
+            bounds=node.attrib.get("bounds","")
+            match=re.fullmatch(r"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]",bounds)
+            if not match: continue
+            x1,y1,x2,y2=map(int,match.groups())
+            nodes.append({"label":label,"x":(x1+x2)//2,"y":(y1+y2)//2,
+                          "clickable":node.attrib.get("clickable")=="true",
+                          "enabled":node.attrib.get("enabled","true")=="true"})
+        return nodes
+    except Exception:
+        return []
+
+def run_semantic_modules(activities):
+    nodes=read_ui_nodes()
+    if not nodes: return
+    visible=" ".join(n["label"] for n in nodes)
+    for key,spec in SEMANTIC_MODULES.items():
+        if activities.get(key) is not True: continue
+        if not any(norm(ctx) in visible for ctx in spec["context"]): continue
+        matches=[n for n in nodes if n["clickable"] and n["enabled"]
+                 and any(n["label"]==norm(action) for action in spec["actions"])]
+        # Ambiguous matches are deliberately skipped; no coordinate guessing.
+        if len(matches)!=1: continue
+        target=matches[0]
+        try:
+            tap(target["x"],target["y"])
+            print(time.strftime("%H:%M:%S"),"Модуль:",spec["label"],"— выполнено действие:",target["label"])
+            time.sleep(1.5)
+            after=read_ui_nodes()
+            after_labels=" ".join(n["label"] for n in after)
+            if target["label"] not in after_labels:
+                print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"— элемент действия изменился/исчез.")
+            else:
+                print(time.strftime("%H:%M:%S"),"Проверка:",spec["label"],"— кнопка осталась; результат не подтверждён.")
+        except Exception as e:
+            print(time.strftime("%H:%M:%S"),"Модуль",spec["label"],"пропущен:",e)
+
 def heartbeat(is_connected):
     api("/api/agent/heartbeat",{"deviceName":DEVICE,"emulatorConnected":is_connected})
 
@@ -232,8 +305,9 @@ def main():
                                 print(time.strftime("%H:%M:%S"),"Сбор:",action["text"],f"({action['x']},{action['y']})")
                                 last_key=key; last_action=now
                         else:
-                            print(time.strftime("%H:%M:%S"),"Игра просканирована; кнопка сбора не найдена.")
-                except Exception as e: print("Ошибка распознавания:",e)
+                            print(time.strftime("%H:%M:%S"),"Производство: пузырь сбора не найден.")
+                    run_semantic_modules(activities)
+                except Exception as e: print("Ошибка игрового цикла:",e)
                 last_scan=now
             if now-last_command_poll>=COMMAND_POLL_SECONDS:
                 run_queued_command()
