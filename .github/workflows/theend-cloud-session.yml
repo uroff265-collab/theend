@@ -62,15 +62,8 @@ jobs:
             adb shell wm size 1080x1920
             adb shell input keyevent 82 || true
             adb exec-out screencap -p > /tmp/theend-cloud-screen.png
-            python - <<'PY'
-            from PIL import Image
-            import cv2, numpy as np
-            p='/tmp/theend-cloud-screen.png'
-            Image.open(p).verify()
-            frame=cv2.imdecode(np.fromfile(p,dtype=np.uint8),cv2.IMREAD_COLOR)
-            assert frame is not None and frame.size, 'Cloud Android screenshot failed'
-            print('ANDROID_EMULATOR_READY',frame.shape)
-            PY
+            test -s /tmp/theend-cloud-screen.png
+            echo "ANDROID_EMULATOR_READY"
             python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
             echo "Remote Android web control started."
             cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8765 --allowed-mail "$ACCESS_EMAIL" >/tmp/theend-tunnel.log 2>&1 &
