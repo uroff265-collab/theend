@@ -1,99 +1,83 @@
-# TheEnd one-click launcher for Windows / LDPlayer
+# TheEnd Windows / LDPlayer launcher. ASCII-only for Windows PowerShell 5.1.
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-try { chcp 65001 | Out-Null; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $OutputEncoding = [Console]::OutputEncoding } catch {}
 $Build = "a743ed220031938c3c27e25b05e44593d771aeab"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/$Build"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Folder
 
-Write-Host "=== TheEnd Bot: starting ===" -ForegroundColor Cyan
-
-# Prepare OCR/OpenCV dependencies and language data on first run.
-$Setup = Join-Path $Folder "install_theend.ps1"
-Invoke-WebRequest "$Repo/install_theend.ps1`?v=$Build" -OutFile $Setup
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
-if ($LASTEXITCODE -ne 0) { throw "TheEnd setup failed. See the setup messages above." }
-
-# Set an unquoted tessdata directory for the child agent process.
-$env:TESSDATA_PREFIX = Join-Path $env:LOCALAPPDATA "TheEnd\tessdata"
-$TesseractDir = "C:\Program Files\Tesseract-OCR"
-if (Test-Path (Join-Path $TesseractDir "tesseract.exe")) {
-  $env:PATH = $TesseractDir + ";" + $env:PATH
-}
-
-# Stop only older TheEnd agent processes, not unrelated Python programs.
 try {
-  $old = Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -match '^python(w)?\.exe$' -and
-    $_.CommandLine -match 'theend_agent(_v\d+)?\.py'
-  }
-  foreach ($p in $old) {
-    Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
-  }
-} catch {}
+  Write-Host "=== TheEnd Agent launcher ===" -ForegroundColor Cyan
+  $Setup = Join-Path $Folder "install_theend.ps1"
+  Invoke-WebRequest -UseBasicParsing -Uri "$Repo/install_theend.ps1" -OutFile $Setup
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
+  if ($LASTEXITCODE -ne 0) { throw "Setup failed. Read the setup output above." }
 
-$Agent = Join-Path $Folder "theend_agent.py"
-Write-Host "Downloading agent files from GitHub..."
-Invoke-WebRequest "$Repo/theend_agent.py`?v=$Build" -OutFile $Agent
-$Vision = Join-Path $Folder "theend_vision.py"
-Invoke-WebRequest "$Repo/theend_vision.py`?v=$Build" -OutFile $Vision
-
-# Fail early with a clear message if either Python module was not downloaded.
-foreach ($RequiredFile in @($Agent, $Vision)) {
-  if (-not (Test-Path $RequiredFile) -or (Get-Item $RequiredFile).Length -lt 100) {
-    throw "Required file is missing or incomplete: $RequiredFile. Check internet and run START_THEEND.bat again."
+  $env:TESSDATA_PREFIX = Join-Path $env:LOCALAPPDATA "TheEnd\tessdata"
+  $TesseractDir = "C:\Program Files\Tesseract-OCR"
+  if (Test-Path (Join-Path $TesseractDir "tesseract.exe")) {
+    $env:PATH = $TesseractDir + ";" + $env:PATH
   }
-}
-$AgentText = Get-Content -Raw -Encoding UTF8 $Agent
-# Validate the exact detector revision, not just a generic V19 label.
-$RequiredMarkers = @(
-  "TheEnd Agent v19",
-  "def find_visual_resource_badges(png):",
-  "Диагностика значка: поиск по игровому полю",
-  "порог действия 0.720 + подтверждение двумя кадрами"
-)
-foreach ($Marker in $RequiredMarkers) {
-  if (-not $AgentText.Contains($Marker)) {
-    throw "Agent source validation failed: missing marker '$Marker'. The downloaded file is not the approved build."
-  }
-}
-if ($AgentText.Contains("Диагностика пшеницы:") -or $AgentText.Contains("порог 0.600")) {
-  throw "Agent source validation failed: obsolete wheat detector detected. Refusing to launch."
-}
-$AgentHash = (Get-FileHash -Algorithm SHA256 $Agent).Hash
-Write-Host "Verified agent build: V19 visual detector | SHA256: $AgentHash" -ForegroundColor Green
-Write-Host "Agent path: $Agent"
-Write-Host "Agent files:"
-Get-Item $Agent, $Vision | Select-Object Name, Length | Format-Table -AutoSize
-& py -3 -c "import os,sys; sys.path.insert(0, r'$Folder'); import theend_vision; print('Vision module loaded:', os.path.basename(theend_vision.__file__))"
-if ($LASTEXITCODE -ne 0) {
-  throw "Python cannot import theend_vision.py. Ensure both agent files are in the project folder."
-}
 
-$Adb = if (Test-Path "C:\platform-tools\adb.exe") { "C:\platform-tools\adb.exe" } else { "adb" }
-Write-Host "Checking ADB..."
-& $Adb start-server | Out-Null
-& $Adb connect "127.0.0.1:5555" | Out-Null
-$Devices = & $Adb devices
-if (-not ($Devices -match "127\.0\.0\.1:5555\s+device")) {
-  Write-Host "LDPlayer is not connected. Open LDPlayer and enable ADB on port 5555." -ForegroundColor Red
-  Read-Host "Press Enter to exit"
+  try {
+    $old = Get-CimInstance Win32_Process | Where-Object {
+      $_.Name -match '^python(w)?\.exe$' -and
+      $_.CommandLine -match 'theend_agent(_v\d+)?\.py'
+    }
+    foreach ($p in $old) {
+      Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+  } catch {}
+
+  $Agent = Join-Path $Folder "theend_agent.py"
+  $Vision = Join-Path $Folder "theend_vision.py"
+  Write-Host "Downloading approved agent files..."
+  Invoke-WebRequest -UseBasicParsing -Uri "$Repo/theend_agent.py" -OutFile $Agent
+  Invoke-WebRequest -UseBasicParsing -Uri "$Repo/theend_vision.py" -OutFile $Vision
+
+  foreach ($RequiredFile in @($Agent, $Vision)) {
+    if (-not (Test-Path $RequiredFile) -or (Get-Item $RequiredFile).Length -lt 100) {
+      throw "Required agent file is missing or incomplete: $RequiredFile"
+    }
+  }
+
+  $AgentText = Get-Content -Raw -Encoding UTF8 $Agent
+  foreach ($Marker in @("TheEnd Agent v19", "def find_visual_resource_badges(png):", "0.720")) {
+    if (-not $AgentText.Contains($Marker)) {
+      throw "Agent validation failed. Missing marker: $Marker"
+    }
+  }
+  $AgentHash = (Get-FileHash -Algorithm SHA256 $Agent).Hash
+  Write-Host "Agent source verified. SHA256: $AgentHash" -ForegroundColor Green
+
+  Write-Host "Checking Python module import..."
+  & py -3 -c 'import os,sys; sys.path.insert(0, os.getcwd()); import theend_vision; print("Vision module loaded:", os.path.basename(theend_vision.__file__))'
+  if ($LASTEXITCODE -ne 0) { throw "Python could not import theend_vision.py." }
+
+  $Adb = "C:\platform-tools\adb.exe"
+  if (-not (Test-Path $Adb)) {
+    $AdbCommand = Get-Command adb.exe -ErrorAction SilentlyContinue
+    if ($AdbCommand) { $Adb = $AdbCommand.Source } else { throw "ADB was not found." }
+  }
+
+  Write-Host "Checking Android emulator connection..."
+  & $Adb start-server | Out-Null
+  & $Adb connect "127.0.0.1:5555" | Out-Null
+  $Devices = & $Adb devices
+  if (-not ($Devices -match "127\.0\.0\.1:5555\s+device")) {
+    throw "LDPlayer is not connected on 127.0.0.1:5555. Open LDPlayer and enable ADB port 5555."
+  }
+
+  & $Adb -s "127.0.0.1:5555" exec-out screencap -p | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "ADB is connected but screenshot capture failed." }
+
+  Write-Host "Emulator is ready. Starting TheEnd Agent..." -ForegroundColor Green
+  Write-Host "Press Ctrl+C to stop."
+  & py $Agent
+  if ($LASTEXITCODE -ne 0) { throw "Agent exited with code $LASTEXITCODE." }
+}
+catch {
+  Write-Host ""
+  Write-Host ("THEEND ERROR: " + $_.Exception.Message) -ForegroundColor Red
   exit 1
-}
-
-# Verify that ADB can capture the emulator screen before starting automation.
-$null = & $Adb -s "127.0.0.1:5555" exec-out screencap -p
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "ADB is connected but cannot capture the screen. Restart LDPlayer." -ForegroundColor Red
-  Read-Host "Press Enter to exit"
-  exit 1
-}
-
-Write-Host "Emulator is ready. Starting TheEnd Agent..." -ForegroundColor Green
-Write-Host "Press Ctrl+C to stop."
-py $Agent
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "Agent exited with error code: $LASTEXITCODE" -ForegroundColor Red
-  Read-Host "Press Enter to exit"
 }
