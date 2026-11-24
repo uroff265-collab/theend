@@ -1,0 +1,79 @@
+name: TheEnd cloud game session
+
+on:
+  workflow_dispatch:
+    inputs:
+      access_email:
+        description: "Email address allowed to open the temporary Android session"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  android-session:
+    name: Protected cloud Android session
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      ACCESS_EMAIL: ${{ inputs.access_email }}
+      THEEND_REMOTE_TOKEN: cloudflare-otp-protected
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cloud emulator tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl python3
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
+          sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
+      - name: Boot Android with Play Store and publish protected browser session
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis_playstore
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            adb shell getprop ro.build.version.release
+            adb shell wm size 1080x1920
+            adb shell input keyevent 82 || true
+            adb exec-out screencap -p > /tmp/theend-cloud-screen.png
+            python - <<'PY'
+            from PIL import Image
+            import cv2, numpy as np
+            p='/tmp/theend-cloud-screen.png'
+            Image.open(p).verify()
+            frame=cv2.imdecode(np.fromfile(p,dtype=np.uint8),cv2.IMREAD_COLOR)
+            assert frame is not None and frame.size, 'Cloud Android screenshot failed'
+            print('ANDROID_EMULATOR_READY',frame.shape)
+            PY
+            python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
+            echo "Remote Android web control started."
+            cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8765 --allowed-mail "$ACCESS_EMAIL" >/tmp/theend-tunnel.log 2>&1 &
+            TUNNEL_PID=$!
+            URL=""
+            for i in $(seq 1 90); do
+              URL=$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/theend-tunnel.log | head -n1 || true)
+              if [ -n "$URL" ]; then break; fi
+              if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then cat /tmp/theend-tunnel.log; exit 1; fi
+              sleep 2
+            done
+            if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "Cloudflare tunnel URL was not created"; exit 1; fi
+            echo ""
+            echo "=============================================="
+            echo "THEEND CLOUD ANDROID IS READY"
+            echo "OPEN THIS LINK: $URL/?k=cloudflare-otp-protected"
+            echo "Cloudflare will send a one-time PIN to the allowed email."
+            echo "Install Last Asylum from Play Store and sign in."
+            echo "Keep this workflow running while using the emulator."
+            echo "=============================================="
+            echo ""
+            for i in $(seq 1 21000); do
+              if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then echo "Cloudflare tunnel stopped"; cat /tmp/theend-tunnel.log; exit 1; fi
+              sleep 1
+            done
