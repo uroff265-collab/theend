@@ -8,6 +8,7 @@ Set-Location $Folder
 
 try {
   Write-Host "=== TheEnd Agent launcher ===" -ForegroundColor Cyan
+  Write-Host "Pinned agent build: $Build" -ForegroundColor Yellow
   $Setup = Join-Path $Folder "install_theend.ps1"
   Invoke-WebRequest -UseBasicParsing -Uri "$Repo/install_theend.ps1" -OutFile $Setup
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
@@ -42,7 +43,7 @@ try {
   }
 
   $AgentText = Get-Content -Raw -Encoding UTF8 $Agent
-  foreach ($Marker in @("TheEnd Agent v19", "def find_visual_resource_badges(png):", "0.620", "def diagnose_game_screen()")) {
+  foreach ($Marker in @("TheEnd Agent v19", "def find_visual_resource_badges(png):", "0.620", "y0,y1=int(h*.025),int(h*.84)", "def diagnose_game_screen()")) {
     if (-not $AgentText.Contains($Marker)) {
       throw "Agent validation failed. Missing marker: $Marker"
     }
