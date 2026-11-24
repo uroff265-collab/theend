@@ -458,9 +458,7 @@ def find_semantic_ocr_target(activities):
 
 LAST_SEMANTIC_SCREEN={}
 
-def run_semantic_modules(activities)
-                    if activities.get('town_production') is True:
-                        run_visual_resource_collection():
+def run_semantic_modules(activities):
     """Execute at most once per unchanged screen for each enabled activity."""
     outcomes=[]
     try:
@@ -745,6 +743,8 @@ def main():
                     # The former background scanner clicked unrelated HUD controls.
                     # Production actions must use an explicit task with UI verification.
                     run_semantic_modules(activities)
+                    if activities.get('town_production') is True:
+                        run_visual_resource_collection()
                 except Exception as e: print("Ошибка игрового цикла:",e)
                 last_scan=now
             if now-last_command_poll>=COMMAND_POLL_SECONDS:
