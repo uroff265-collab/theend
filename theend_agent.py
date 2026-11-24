@@ -312,7 +312,11 @@ def find_collection(png, words):
 # Cropped from the actual Last Asylum screenshot: wheat icon inside floating green reward badge.
 WHEAT_ICON_TEMPLATE_B64="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"
 
+LAST_WHEAT_DIAG=0
+
 def find_visual_resource_badges(png):
+    """Find wheat badges and expose a throttled confidence diagnostic."""
+    global LAST_WHEAT_DIAG
     if cv2 is None or np is None: return []
     frame=cv2.imdecode(np.frombuffer(png,dtype=np.uint8),cv2.IMREAD_COLOR)
     if frame is None: return []
@@ -329,16 +333,26 @@ def find_visual_resource_badges(png):
     roi=gray[y0:y1,x0:x1]
     if roi.shape[0]<th or roi.shape[1]<tw: return []
     scores=cv2.matchTemplate(roi,templ,cv2.TM_CCOEFF_NORMED)
+    _,best_score,_,best_loc=cv2.minMaxLoc(scores)
+    now=time.time()
+    if now-LAST_WHEAT_DIAG>=30:
+        print(time.strftime("%H:%M:%S"),
+              "Диагностика пшеницы: кадр",f"{w}x{h}",
+              "| область",f"{x0}:{x1},{y0}:{y1}",
+              "| лучшее совпадение",round(float(best_score),3),
+              "| порог 0.600")
+        LAST_WHEAT_DIAG=now
     found=[]
+    work=scores.copy()
     while True:
-        _,score,_,loc=cv2.minMaxLoc(scores)
+        _,score,_,loc=cv2.minMaxLoc(work)
         if score<0.60: break
         x=x0+loc[0]+tw//2; y=y0+loc[1]+th//2
         if all(abs(x-z["x"])>tw*.8 or abs(y-z["y"])>th*.8 for z in found):
             found.append({"x":int(x),"y":int(y),"confidence":round(float(score),3)})
         xx,yy=loc
-        cv2.rectangle(scores,(max(0,xx-tw//2),max(0,yy-th//2)),
-                      (min(scores.shape[1]-1,xx+tw//2),min(scores.shape[0]-1,yy+th//2)),-1,-1)
+        cv2.rectangle(work,(max(0,xx-tw//2),max(0,yy-th//2)),
+                      (min(work.shape[1]-1,xx+tw//2),min(work.shape[0]-1,yy+th//2)),-1,-1)
         if len(found)>=6: break
     return sorted(found,key=lambda z:z["x"])
 
@@ -715,7 +729,7 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit(r"ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v18 запущен | build 2026-11-24-visual-wheat-collection")
+    print("TheEnd Agent v19 запущен | build 2026-11-24-wheat-diagnostics")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Режим: визуальное распознавание значков сбора пшеницы по шаблону; OCR не используется для поиска этих значков.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
