@@ -44,7 +44,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
           emulator-boot-timeout: 1200
           script: |
-            set -euo pipefail
+            set -eu
             adb wait-for-device
             adb shell getprop ro.build.version.release
             adb shell wm size 1080x1920
