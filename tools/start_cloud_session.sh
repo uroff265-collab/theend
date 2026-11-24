@@ -109,7 +109,7 @@ echo "Keep this workflow running while using the emulator."
 echo "=============================================="
 echo ""
 
-for i in $(seq 1 2400); do
+for i in $(seq 1 1800); do
   if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then echo "Public tunnel stopped"; cat /tmp/theend-tunnel.log; exit 1; fi
   if ! kill -0 "$REMOTE_PID" 2>/dev/null; then echo "Remote Android server stopped"; cat /tmp/theend-remote.log; exit 1; fi
   sleep 1
