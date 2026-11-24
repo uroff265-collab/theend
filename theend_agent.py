@@ -377,10 +377,17 @@ def learn_screen():
         im=Image.open(io.BytesIO(png))
         width,height=im.size
         screen_state=analyze_screen(words,width,height)
-        labels=sorted(set(n["label"] for n in nodes))
+        # Unity exposes only a generic "Game view" accessibility node.
+        # Do not let that placeholder hide the OCR text that describes the real game screen.
+        labels=sorted(set(n["label"] for n in nodes
+                          if norm(n["label"]) not in ("game view","gameview","")))
+        ocr_labels=sorted(set(norm(w["text"]) for w in words if w["conf"]>=25 and norm(w["text"])))
+        if ocr_labels:
+            labels=sorted(set(labels + ocr_labels))
         if not labels:
-            labels=sorted(set(norm(w["text"]) for w in words if w["conf"]>=75))
-        if not labels: return 0
+            print(time.strftime("%H:%M:%S"),"Экран пока не размечен: accessibility nodes=",
+                  [n["label"] for n in nodes[:8]],"| OCR слов=",len(words))
+            return 0
         signature="|".join(labels[:80])
         if signature != LAST_SCREEN_SIGNATURE:
             screen_info=screen_state.get("screen",{})
