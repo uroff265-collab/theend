@@ -370,45 +370,51 @@ PENDING_WHEAT_TARGET=None
 WHEAT_CONFIRMATIONS=0
 
 def run_visual_resource_collection():
+    """Detect green grass/leaf resource badges by badge shape and color."""
     global PENDING_WHEAT_TARGET,WHEAT_CONFIRMATIONS
     try:
-        candidates=find_visual_resource_badges(screen_png())
-        # Keep weak matches for diagnostics, but never act on them.
-        eligible=[z for z in candidates if z["confidence"]>=0.62]
-        if not eligible:
+        png=screen_png()
+        # Unity has no useful accessibility labels/OCR for this control.
+        # Detect the white reward ring and green plant artwork instead of wheat.
+        target=find_collection(png,[])
+        now=time.time()
+        if not target:
+            if now-LAST_WHEAT_DIAG>=15:
+                print(time.strftime("%H:%M:%S"),
+                      "Поиск травы: круглых наградных значков с зелёным ресурсом не найдено.")
+                LAST_WHEAT_DIAG=now
             PENDING_WHEAT_TARGET=None
             WHEAT_CONFIRMATIONS=0
             return
-        target=eligible[0]
         w,h=get_screen_size()
-        if PENDING_WHEAT_TARGET and abs(target["x"]-PENDING_WHEAT_TARGET["x"])<w*0.025 and abs(target["y"]-PENDING_WHEAT_TARGET["y"])<h*0.025:
+        if PENDING_WHEAT_TARGET and abs(target["x"]-PENDING_WHEAT_TARGET["x"])<w*0.035 and abs(target["y"]-PENDING_WHEAT_TARGET["y"])<h*0.035:
             WHEAT_CONFIRMATIONS+=1
         else:
             PENDING_WHEAT_TARGET=target
             WHEAT_CONFIRMATIONS=1
         if WHEAT_CONFIRMATIONS<3:
-            print(time.strftime("%H:%M:%S"),"Кандидат значка ресурса пока не нажимаю: жду три совпадения подряд.",
-                  f'позиция=({target["x"]},{target["y"]}) score={target["confidence"]}')
+            print(time.strftime("%H:%M:%S"),
+                  "Найден зелёный значок ресурса; жду подтверждения:",
+                  f'({target["x"]},{target["y"]}) зелёная область={target["conf"]:.1f}%')
             return
-        now=time.time()
         key=f'{round(target["x"]/w*100)}:{round(target["y"]/h*100)}'
-        if now-LAST_VISUAL_TAPS.get(key,0)<120: return
-        print(time.strftime("%H:%M:%S"),"Подтверждённый значок ресурса:",
-              f'({target["x"]},{target["y"]})',"совпадение",target["confidence"],
-              "| подтверждений:",WHEAT_CONFIRMATIONS)
+        if now-LAST_VISUAL_TAPS.get(key,0)<120:
+            return
+        print(time.strftime("%H:%M:%S"),"Подтверждён значок травы/зелёного ресурса:",
+              f'({target["x"]},{target["y"]})',"| подтверждений:",WHEAT_CONFIRMATIONS)
         tap(target["x"],target["y"])
         LAST_VISUAL_TAPS[key]=now
         PENDING_WHEAT_TARGET=None
         WHEAT_CONFIRMATIONS=0
         time.sleep(1.2)
-        after=find_visual_resource_badges(screen_png())
-        still=any(abs(z["x"]-target["x"])<w*.04 and abs(z["y"]-target["y"])<h*.04
-                  and z["confidence"]>=0.62 for z in after)
+        after=find_collection(screen_png(),[])
+        still=bool(after and abs(after["x"]-target["x"])<w*.04
+                   and abs(after["y"]-target["y"])<h*.04)
         print(time.strftime("%H:%M:%S"),
               "Значок остался после нажатия; повтор заблокирован на 120 секунд." if still
-              else "Значок исчез после нажатия; визуальный сбор подтверждён.")
+              else "Значок исчез или изменился после нажатия; визуальная проверка выполнена.")
     except Exception as e:
-        print(time.strftime("%H:%M:%S"),"Визуальный сбор:",str(e)[:200])
+        print(time.strftime("%H:%M:%S"),"Визуальный сбор травы:",str(e)[:200])
 
 
 def tap(x,y):
