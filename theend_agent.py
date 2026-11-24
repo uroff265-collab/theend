@@ -395,35 +395,31 @@ def run_visual_resource_collection():
               len(targets),"кандидат(ов):",
               "; ".join(f'({z["x"]},{z["y"]}) {z["conf"]:.1f}%' for z in targets[:8]))
         collected=0
-        # A candidate is clicked only if it is not on cooldown. After each tap,
-        # take a fresh frame and verify that the same badge disappeared/changed.
-        for target in targets[:5]:
+        attempts=0
+        # Re-scan after every successful tap because the map may shift.
+        while targets and attempts<5:
+            target=next((z for z in targets
+                if time.time()-LAST_VISUAL_TAPS.get(
+                    f'{round(z["x"]/w*100)}:{round(z["y"]/h*100)}',0)>=120),None)
+            if target is None: break
             key=f'{round(target["x"]/w*100)}:{round(target["y"]/h*100)}'
-            if time.time()-LAST_VISUAL_TAPS.get(key,0)<120:
-                continue
             print(time.strftime("%H:%M:%S"),"Пробую собрать ресурс:",
                   f'({target["x"]},{target["y"]})')
             tap(target["x"],target["y"])
             LAST_VISUAL_TAPS[key]=time.time()
+            attempts+=1
             time.sleep(1.0)
-            after_targets=find_collection(screen_png(),[])
+            targets=find_collection(screen_png(),[])
             still=any(abs(z["x"]-target["x"])<w*.04
                       and abs(z["y"]-target["y"])<h*.04
-                      for z in after_targets)
+                      for z in targets)
             if still:
                 print(time.strftime("%H:%M:%S"),
                       "Сбор НЕ подтверждён: значок остался на месте; повтор заблокирован на 120 секунд.")
-                # Do not tap other ambiguous bubbles after a failed verification.
                 break
             collected+=1
             print(time.strftime("%H:%M:%S"),
                   "Визуально подтверждено: значок исчез или изменился после нажатия.")
-            # The map can shift after collection; refresh candidates before next tap.
-            if collected<5:
-                targets=after_targets
-                if not targets:
-                    break
-                # Restarting on the refreshed frame is handled by the next loop iteration.
         print(time.strftime("%H:%M:%S"),"Итог цикла сбора:",
               "подтверждено",collected,"| найдено изначально",len(targets))
         PENDING_WHEAT_TARGET=None
