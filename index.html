@@ -498,15 +498,15 @@ h1 { margin:0 0 8px;font-size:29px; }
     ];
     function openModuleDetails(item, enabled, openSettings=false) {
       const [key,title,description]=item;
-      const implemented=key==="town_production";
+      const implemented=["town_production","exploration_camp","sanctuary","alliance_help","golden_eggs"].includes(key);
       const shade=document.createElement("div");
       shade.className="module-modal-shade";
-      shade.innerHTML='<section class="module-modal" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="module-modal-head"><strong>'+esc(title)+'</strong><span class="module-status '+(enabled?'':'off')+'">'+(enabled?'НА ПАУЗЕ':'ВЫКЛЮЧЕНА')+'</span></header><nav class="module-tabs"><button class="module-tab '+(!openSettings?'active':'')+'" data-tab="now">Сейчас</button><button class="module-tab '+(openSettings?'active':'')+'" data-tab="settings">Настройки</button></nav><div class="module-modal-body" id="moduleModalBody"></div><footer class="module-modal-foot"><button class="module-modal-ok">OK</button></footer></section>';
+      shade.innerHTML='<section class="module-modal" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="module-modal-head"><strong>'+esc(title)+'</strong><span class="module-status '+(enabled?'':'off')+'">'+(enabled?'ВКЛЮЧЕНА':'ВЫКЛЮЧЕНА')+'</span></header><nav class="module-tabs"><button class="module-tab '+(!openSettings?'active':'')+'" data-tab="now">Сейчас</button><button class="module-tab '+(openSettings?'active':'')+'" data-tab="settings">Настройки</button></nav><div class="module-modal-body" id="moduleModalBody"></div><footer class="module-modal-foot"><button class="module-modal-ok">OK</button></footer></section>';
       document.body.appendChild(shade);
       const body=shade.querySelector("#moduleModalBody");
       const draw=tab=>{
         shade.querySelectorAll(".module-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
-        if(tab==="now") body.innerHTML='<p><b>Статус:</b> '+(enabled?'На паузе — ожидает запуска агента':'Модуль выключен')+'</p><p><b>Описание:</b> '+esc(description)+'</p><p style="color:#aab5b1">'+(implemented?'Экспериментальное распознавание доступно локальному агенту. Реальное выполнение ещё требует проверки в игре.':'Модуль интерфейса подготовлен. Автоматическое выполнение этой активности пока не реализовано.')+'</p>';
+        if(tab==="now") body.innerHTML='<p><b>Статус:</b> '+(enabled?'На паузе — ожидает запуска агента':'Модуль выключен')+'</p><p><b>Описание:</b> '+esc(description)+'</p><p style="color:#aab5b1">'+(implemented?'Экспериментальный модуль агента. Его работу и получение наград необходимо подтвердить на реальном экране игры.':'Автоматическое выполнение этой активности пока не реализовано; переключатель заблокирован.')+'</p>';
         else body.innerHTML='<p><b>Режим:</b> '+(enabled?'Включён в профиле автоматизации':'Выключен')+'</p><p><b>Синхронизация:</b> настройки сохраняются на сервере и передаются агенту.</p><p style="color:#aab5b1">Параметры самой игровой активности появятся после реализации и проверки её алгоритма.</p>';
       };
       shade.querySelectorAll(".module-tab").forEach(b=>b.addEventListener("click",()=>draw(b.dataset.tab)));
@@ -526,17 +526,17 @@ h1 { margin:0 0 8px;font-size:29px; }
         const settings=data.activities || {};
         host.className="module-grid";
         host.innerHTML=activityCatalog.map(([key,title,description]) => {
-          const implemented = key === "town_production";
-          const enabled = settings[key]===true;
-          const state = enabled ? "НА ПАУЗЕ" : "ВЫКЛЮЧЕНА";
-          return '<article class="module-tile"><div class="module-top"><strong>'+esc(title)+'</strong><label class="switch module-control" title="Включить или выключить"><input type="checkbox" role="switch" aria-label="'+esc(title)+'" class="activity-toggle module-toggle" data-key="'+key+'" '+(enabled?'checked':'')+'></label></div><span class="module-status '+(enabled?'':'off')+'">'+state+'</span><div class="module-description">'+(enabled?'запустится вместе с ботом':esc(description))+'</div><div class="module-footer"><span class="module-grip">⠿</span><div class="module-actions"><button class="module-action" data-module-open="'+key+'">Подробнее</button><button class="module-action" data-module-settings="'+key+'" aria-label="Настройки">⚙</button></div></div></article>';
+          const implemented = ["town_production","exploration_camp","sanctuary","alliance_help","golden_eggs"].includes(key);
+          const enabled = implemented && settings[key]===true;
+          const state = enabled ? "ВКЛЮЧЕНА" : implemented ? "ВЫКЛЮЧЕНА" : "СКОРО";
+          return '<article class="module-tile"><div class="module-top"><strong>'+esc(title)+'</strong><label class="switch module-control" title="Включить или выключить"><input type="checkbox" role="switch" aria-label="'+esc(title)+'" class="activity-toggle module-toggle" data-key="'+key+'" '+(enabled?'checked':'')+(!implemented?' disabled':'')+'></label></div><span class="module-status '+(enabled?'':'off')+'">'+state+'</span><div class="module-description">'+(enabled?'экспериментальный режим · требуется проверка в игре':implemented?esc(description):'автоматизация ещё разрабатывается')+'</div><div class="module-footer"><span class="module-grip">⠿</span><div class="module-actions"><button class="module-action" data-module-open="'+key+'">Подробнее</button><button class="module-action" data-module-settings="'+key+'" aria-label="Настройки">⚙</button></div></div></article>';
         }).join("");
         host.querySelectorAll(".activity-toggle").forEach(input => {
           input.addEventListener("change",()=> {
             const tile=input.closest(".module-tile"), badge=tile.querySelector(".module-status"), desc=tile.querySelector(".module-description");
-            badge.textContent=input.checked?"НА ПАУЗЕ":"ВЫКЛЮЧЕНА";
+            badge.textContent=input.checked?"ВКЛЮЧЕНА":"ВЫКЛЮЧЕНА";
             badge.classList.toggle("off",!input.checked);
-            desc.textContent=input.checked?"запустится вместе с ботом":activityCatalog.find(([k])=>k===input.dataset.key)?.[2] || "";
+            desc.textContent=input.checked?"экспериментальный режим · требуется проверка в игре":activityCatalog.find(([k])=>k===input.dataset.key)?.[2] || "";
           });
         });
         host.querySelectorAll("[data-module-open],[data-module-settings]").forEach(button => button.addEventListener("click",()=> {
