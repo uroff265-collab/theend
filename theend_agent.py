@@ -140,10 +140,10 @@ def recognize(png):
                 capture_output=True,timeout=30,env=env)
             if result.returncode!=0:
                 raise RuntimeError(result.stderr.decode("utf-8","replace"))
-            rows=csv.DictReader(io.StringIO(result.stdout.decode("utf-8","replace")),delimiter="\\t")
+            rows=csv.DictReader(io.StringIO(result.stdout.decode("utf-8","replace")),delimiter="\t")
             words=[]
             for row in rows:
-                t=re.sub(r"\\s+"," ",(row.get("text") or "")).strip()
+                t=re.sub(r"\s+"," ",(row.get("text") or "")).strip()
                 try:
                     conf=float(row.get("conf","-1")); x=int(row["left"]); y=int(row["top"]); w=int(row["width"]); h=int(row["height"])
                 except (ValueError,TypeError,KeyError): continue
