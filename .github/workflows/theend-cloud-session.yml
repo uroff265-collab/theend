@@ -8,11 +8,6 @@ on:
       - 'tools/cloud_android_remote.py'
       - 'tools/start_cloud_session.sh'
   workflow_dispatch:
-    inputs:
-      access_email:
-        description: "Email address allowed to open the temporary Android session"
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -22,7 +17,6 @@ jobs:
     name: Protected cloud Android session
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    env:
     steps:
       - uses: actions/checkout@v4
       - name: Install cloud emulator tools
@@ -47,7 +41,7 @@ jobs:
         with:
           api-level: 30
           # Match the google_apis image that passed the cloud ADB/screenshot job.
-          target: google_apis
+          target: google_apis_playstore
           arch: x86_64
           profile: pixel_2
           disable-animations: true
