@@ -1,7 +1,7 @@
 # TheEnd Windows / LDPlayer launcher. ASCII-only for Windows PowerShell 5.1.
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$Build = "6b12975280651f322beb66ff4423195d9feb92d7"
+$Build = "c21dacdea6ad1db70d1af5e7ba53841a8b0fe219"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/$Build"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Folder
