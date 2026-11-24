@@ -5,6 +5,9 @@ adb wait-for-device
 ANDROID_VERSION="$(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb shell wm size 1080x1920
 adb shell input keyevent 82 || true
+# Open the Last Asylum Play Store listing on the cloud device.
+adb shell am start -a android.intent.action.VIEW -d 'market://details?id=com.phs.global' || true
+sleep 8
 adb exec-out screencap -p > /tmp/theend-cloud-screen.png
 test -s /tmp/theend-cloud-screen.png
 echo "ANDROID_EMULATOR_READY Android $ANDROID_VERSION"
