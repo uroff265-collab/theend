@@ -566,7 +566,7 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v14 запущен | build 2026-11-24-direct-tesseract-cli")
+    print("TheEnd Agent v15 запущен | build 2026-11-24-game-view-detection")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Безопасный режим: только контекстные кнопки Android UI; слепые координаты и OCR-сбор отключены.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
@@ -584,7 +584,7 @@ def main():
                 try:
                     activities=get_agent_config()
                     active_modules=tuple(k for k,v in activities.items() if v is True)
-                    print(time.strftime("%H:%M:%S"),"Настройки синхронизированы; включено модулей:",len(active_modules))
+                    print(time.strftime("%H:%M:%S"),"Настройки синхронизированы; включено модулей:",len(active_modules),"|",", ".join(active_modules) if active_modules else "все выключены в панели сайта")
                 except Exception as e:
                     print("Не удалось обновить настройки модулей:",e)
                 last_config_poll=now
