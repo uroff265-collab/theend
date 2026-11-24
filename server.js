@@ -391,7 +391,7 @@ app.post("/internal/cloud-session", async (req, res) => {
     if (!authorization.startsWith("Bearer ")) return res.status(401).json({error:"GitHub Actions identity required."});
     const claims = await verifyGithubActionsToken(authorization.slice(7));
     const { url, token, runId, commitSha } = req.body || {};
-    if (typeof url !== "string" || !/^https:\/\/(?:[A-Za-z0-9-]+\.)+(?:lhr\.life|run\.pinggy-free\.link|free\.pinggy\.net|a\.pinggy\.link)$/.test(url) ||
+    if (typeof url !== "string" || !/^https:\/\/(?:[A-Za-z0-9-]+\.)+(?:lhr\.life|run\.pinggy-free\.link|free\.pinggy\.net|a\.pinggy\.link|trycloudflare\.com)$/.test(url) ||
         typeof token !== "string" || !/^[A-Za-z0-9_-]{32,128}$/.test(token) ||
         !/^\d+$/.test(String(runId || "")) ||
         typeof commitSha !== "string" || !/^[a-f0-9]{40}$/.test(commitSha)) {
