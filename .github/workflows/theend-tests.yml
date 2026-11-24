@@ -89,25 +89,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
           emulator-boot-timeout: 1200
           script: |
-            adb devices
-            adb shell getprop ro.build.version.release
-            adb shell wm size 1080x1920
-            PLAY_STORE_APK="$(adb shell pm path com.android.vending 2>/dev/null | tr -d '\r' | head -n1 || true)"
-            if [ -n "$PLAY_STORE_APK" ]; then
-              echo "GOOGLE_PLAY_STORE_OK $PLAY_STORE_APK"
-              adb shell am start -a android.intent.action.VIEW -d "market://details?id=com.phs.global" || true
-              sleep 12
-            else
-              echo "::warning::Google Play Store package com.android.vending is absent in this emulator image; preserving emulator screenshot and continuing diagnostics."
-              adb shell pm list packages | grep -Ei 'vending|google' | head -n 30 || true
-            fi
-            if adb shell pm path com.phs.global | grep -q '^package:'; then
-              echo "LAST_ASYLUM_INSTALLED"
-            else
-              echo "LAST_ASYLUM_NOT_INSTALLED"
-            fi
-            adb exec-out screencap -p > /tmp/theend-cloud-screen.png
-            python -c "from PIL import Image; import cv2, numpy as np, os; p='/tmp/theend-cloud-screen.png'; im=Image.open(p); im.verify(); frame=cv2.imdecode(np.fromfile(p,dtype=np.uint8),cv2.IMREAD_COLOR); assert frame is not None and frame.size > 0, 'OpenCV could not read emulator screenshot'; print('ANDROID_EMULATOR_OK', frame.shape, 'screenshot_bytes=', os.path.getsize(p))"
+            python tools/cloud_android_smoke.py
       - name: Upload cloud emulator screenshot
         if: always()
         uses: actions/upload-artifact@v4
