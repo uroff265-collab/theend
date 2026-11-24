@@ -13,6 +13,8 @@ trap diagnostics ERR
 set -x
 
 echo "THEEND_ADB_DIAGNOSTICS_BEGIN"
+ADB_KEY="$HOME/.android/adbkey"
+if [ -s "$ADB_KEY" ]; then export ADB_VENDOR_KEYS="$ADB_KEY"; fi
 adb version
 adb start-server
 adb devices -l

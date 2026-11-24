@@ -60,14 +60,25 @@ else
 fi
 
 rm -f /tmp/theend-cloud-screen.png
+mkdir -p "$HOME/.android"
+ADB_KEY="$HOME/.android/adbkey"
+if [ ! -s "$ADB_KEY" ]; then
+  "$ADB" keygen "$ADB_KEY"
+fi
+export ADB_VENDOR_KEYS="$ADB_KEY"
+GITHUB_ENV_FILE="$(printenv GITHUB_ENV || true)"
+if [ -n "$GITHUB_ENV_FILE" ]; then
+  echo "ADB_VENDOR_KEYS=$ADB_KEY" >> "$GITHUB_ENV_FILE"
+fi
+"$ADB" kill-server >/dev/null 2>&1 || true
+"$ADB" start-server
+
 "$EMULATOR" -port 5554 -avd theend-api30 "${ACCEL_ARGS[@]}" \
   -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim \
-  -no-snapshot -no-metrics -wipe-data \
+  -no-snapshot -no-metrics -wipe-data -skip-adb-auth \
   >/tmp/theend-emulator.log 2>&1 &
 EMULATOR_PID=$!
 echo "ANDROID_EMULATOR_PID=$EMULATOR_PID"
-
-"$ADB" start-server
 BOOTED=0
 for i in $(seq 1 200); do
   STATE="$("$ADB" -s emulator-5554 get-state 2>/dev/null || true)"
