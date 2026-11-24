@@ -130,8 +130,9 @@ def recognize(png):
     except Exception: langs=["eng"]
     if not langs: langs=["eng"]
     best=[]
+    errors=[]
     for lang in langs:
-        for psm in (11,6):
+        for psm in (11,6,12):
             try:
                 d=pytesseract.image_to_data(im,lang=lang,config=(TESSDATA_ARGS+f" --oem 3 --psm {psm}").strip(),output_type=pytesseract.Output.DICT)
                 words=[]
@@ -140,12 +141,19 @@ def recognize(png):
                     try:
                         conf=float(d["conf"][i]); x=int(d["left"][i]); y=int(d["top"][i]); w=int(d["width"][i]); h=int(d["height"][i])
                     except (ValueError,TypeError,KeyError): continue
-                    if t and conf>=45 and w>0 and h>0:
+                    if t and conf>=25 and w>0 and h>0:
                         words.append({"text":t,"x":round((x+w/2)/scale),"y":round((y+h/2)/scale),"w":round(w/scale),"h":round(h/scale),"conf":conf})
                 if sum(z["conf"] for z in words)>sum(z["conf"] for z in best): best=words
             except pytesseract.pytesseract.TesseractNotFoundError:
                 raise RuntimeError("Tesseract OCR не найден. Установи его и перезапусти PowerShell.")
-            except Exception: pass
+            except Exception as e:
+                errors.append(f"{lang}/psm{psm}: {type(e).__name__}: {e}")
+    if not best and errors:
+        print(time.strftime("%H:%M:%S"),"OCR ошибка:", " | ".join(errors[:3]))
+    elif best and not getattr(recognize,"_reported",False):
+        print(time.strftime("%H:%M:%S"),"OCR проверка: распознано слов:",len(best),
+              "| примеры:", " ".join(z["text"] for z in best[:18]))
+        recognize._reported=True
     return best
 
 def norm(s):
