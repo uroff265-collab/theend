@@ -55,7 +55,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
           emulator-boot-timeout: 1200
-          script: |
+          script: bash tools/start_cloud_session.sh
             set -eu
             adb wait-for-device
             adb shell getprop ro.build.version.release
