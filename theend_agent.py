@@ -66,8 +66,9 @@ def configure_ocr():
     # Pin the model directory in this process so every pytesseract call uses it.
     local=os.environ.get("LOCALAPPDATA","") if os.name=="nt" else ""
     preferred=os.path.join(local,"TheEnd","tessdata") if local else ""
-    if preferred and os.path.isdir(preferred):
-        os.environ["TESSDATA_PREFIX"]=preferred
+    # Do not set TESSDATA_PREFIX: on Windows it can override --tessdata-dir
+    # and make Tesseract append the language filename to a quoted path.
+    os.environ.pop("TESSDATA_PREFIX", None)
     if not OCR: raise SystemExit("Установи зависимости: py -m pip install pytesseract pillow opencv-python-headless")
     candidates=[shutil.which("tesseract"),r"C:\Program Files\Tesseract-OCR\tesseract.exe",r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]
     for p in candidates:
@@ -88,7 +89,14 @@ def configure_ocr():
         available=pytesseract.get_languages(config=TESSDATA_ARGS)
         preferred=[x for x in ("eng","rus") if x in available]
         if preferred:
-            print("OCR: языки", "+".join(preferred), "| модели:", TESSDATA_ARGS or "системная папка")
+            # Run an actual OCR call during startup; get_languages alone is not enough.
+            from PIL import Image, ImageDraw
+            probe=Image.new("RGB",(480,100),"white")
+            ImageDraw.Draw(probe).text((12,25),"THEEND OCR TEST 123",fill="black")
+            test=pytesseract.image_to_string(probe,lang="eng",config=(TESSDATA_ARGS+" --oem 3 --psm 7").strip())
+            if not test.strip():
+                raise RuntimeError("Tesseract нашёл модели, но тестовое распознавание вернуло пустой текст.")
+            print("OCR: языки", "+".join(preferred), "| модели:", TESSDATA_ARGS or "системная папка", "| тест:", repr(test.strip()))
         else:
             print("OCR: языковые модели eng/rus не найдены; доступно:", ", ".join(available))
     except Exception as e:
