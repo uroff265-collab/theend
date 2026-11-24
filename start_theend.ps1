@@ -29,6 +29,19 @@ Invoke-WebRequest "$Repo/theend_agent.py" -OutFile $Agent
 $Vision = Join-Path $Folder "theend_vision.py"
 Invoke-WebRequest "$Repo/theend_vision.py" -OutFile $Vision
 
+# Fail early with a clear message if either Python module was not downloaded.
+foreach ($RequiredFile in @($Agent, $Vision)) {
+  if (-not (Test-Path $RequiredFile) -or (Get-Item $RequiredFile).Length -lt 100) {
+    throw "Не удалось загрузить обязательный файл: $RequiredFile. Проверь интернет и запусти START_THEEND.bat ещё раз."
+  }
+}
+Write-Host "Файлы агента:"
+Get-Item $Agent, $Vision | Select-Object Name, Length | Format-Table -AutoSize
+& py -3 -c "import os,sys; sys.path.insert(0, r'$Folder'); import theend_vision; print('Модуль распознавания загружен:', os.path.basename(theend_vision.__file__))"
+if ($LASTEXITCODE -ne 0) {
+  throw "Python не видит theend_vision.py в папке проекта. Проверь, что оба файла лежат рядом."
+}
+
 $Adb = if (Test-Path "C:\platform-tools\adb.exe") { "C:\platform-tools\adb.exe" } else { "adb" }
 Write-Host "Проверяю ADB..."
 & $Adb start-server | Out-Null
