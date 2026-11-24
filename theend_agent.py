@@ -446,6 +446,16 @@ def learn_screen():
         words=recognize(png)
         im=Image.open(io.BytesIO(png))
         width,height=im.size
+        if not words and not getattr(learn_screen,"_diagnostic_saved",False):
+            try:
+                desktop=os.path.join(os.path.expanduser("~"),"Desktop")
+                os.makedirs(desktop,exist_ok=True)
+                diagnostic=os.path.join(desktop,"TheEnd_screen_diagnostic.png")
+                im.convert("RGB").save(diagnostic,optimize=True)
+                print(time.strftime("%H:%M:%S"),"Диагностический кадр сохранён:",diagnostic)
+                learn_screen._diagnostic_saved=True
+            except Exception as e:
+                print("Не удалось сохранить диагностический кадр:",str(e)[:160])
         screen_state=analyze_screen(words,width,height)
         # Unity exposes only a generic "Game view" accessibility node.
         # Do not let that placeholder hide the OCR text that describes the real game screen.
@@ -643,7 +653,7 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit(r"ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v16 запущен | build 2026-11-24-adb-capture-fallback")
+    print("TheEnd Agent v17 запущен | build 2026-11-24-screen-diagnostic")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Безопасный режим: только контекстные кнопки Android UI; слепые координаты и OCR-сбор отключены.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
