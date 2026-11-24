@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 try { chcp 65001 | Out-Null; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $OutputEncoding = [Console]::OutputEncoding } catch {}
-$Build = "bcfc73deea286f6d0cb6807d7ad6a8d5c239d8e2"
+$Build = "972c7ab67d119f063e4df4174b4dd7ebe5f625d6"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/$Build"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Folder
