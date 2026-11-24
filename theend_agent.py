@@ -326,7 +326,7 @@ def find_visual_resource_badges(png):
     gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
     # Search the full playable town, not just the upper HUD strip.
     x0,x1=int(w*.06),int(w*.94)
-    y0,y1=int(h*.12),int(h*.84)
+    y0,y1=int(h*.025),int(h*.84)
     roi=gray[y0:y1,x0:x1]
     base_scale=w/900.0
     candidates=[]
