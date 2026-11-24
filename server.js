@@ -260,16 +260,34 @@ app.post("/api/agent/heartbeat", requireAgentToken, async (req, res) => {
 });
 
 app.post("/api/agent/collect-resources", async (_req, res) => {
-  // Collection is driven by the agent's local screen recognition. Never enqueue blind coordinates.
+  // Queue a real agent job. The worker performs screen recognition; the API never sends blind coordinates.
+  const client = await pool.connect();
   try {
-    const state = await pool.query("SELECT emulator_connected, last_seen FROM agent_state WHERE id=1");
+    await client.query("BEGIN");
+    const state = await client.query("SELECT emulator_connected, last_seen FROM agent_state WHERE id=1 FOR UPDATE");
     const row = state.rows[0];
     const online = !!row && row.emulator_connected && (Date.now() - new Date(row.last_seen).getTime() < 45000);
-    if (!online) return res.status(409).json({error:"Android-агент или эмулятор не подключён."});
-    res.status(202).json({ok:true,queued:0,message:"Запрос принят. Агент непрерывно анализирует экран локально; автоматическое действие выполняется только при распознанной цели."});
+    if (!online) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({error:"Android-агент или эмулятор не подключён."});
+    }
+    const active = await client.query("SELECT id FROM agent_tasks WHERE status IN ('queued','running') LIMIT 1");
+    if (active.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({error:"У агента уже выполняется другая задача.",taskId:String(active.rows[0].id)});
+    }
+    const queued = await client.query(
+      "INSERT INTO agent_tasks (instruction) VALUES ($1) RETURNING id, status, created_at AS \"createdAt\"",
+      ["Собери ресурсы в городе"]
+    );
+    await client.query("COMMIT");
+    return res.status(202).json({ok:true,queued:1,task:{...queued.rows[0],id:String(queued.rows[0].id)},message:"Задача передана игровому агенту."});
   } catch (error) {
-    console.error("Could not check resource collection agent:", error.message);
-    res.status(500).json({error:"Не удалось проверить агента."});
+    await client.query("ROLLBACK").catch(()=>{});
+    console.error("Could not queue resource collection:", error.message);
+    return res.status(500).json({error:"Не удалось поставить сбор ресурсов в очередь."});
+  } finally {
+    client.release();
   }
 });
 
