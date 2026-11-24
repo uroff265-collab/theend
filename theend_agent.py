@@ -696,9 +696,29 @@ def collect_offline_production():
     return False,"Кнопка сбора не найдена однозначно. Ничего не нажимал."
 
 
+def diagnose_game_screen():
+    """Observe the current game screen and return OCR/classification without tapping."""
+    png=screen_png()
+    words=recognize(png)
+    width,height=get_screen_size()
+    report=analyze_screen(words,width,height)
+    screen=report.get("screen") or {}
+    lines=[str(x.get("text","")).strip() for x in report.get("lines",[]) if str(x.get("text","")).strip()]
+    summary=" | ".join(lines[:14])[:900]
+    screen_name=screen.get("type","unknown")
+    confidence=screen.get("confidence",0)
+    evidence=", ".join(screen.get("evidence",[])) or "нет"
+    return ("completed",
+        f"Диагностика экрана завершена. Экран: {screen_name} (уверенность {confidence}). "
+        f"Разрешение: {width}x{height}. Признаки: {evidence}. "
+        f"Распознанный текст: {summary or 'текст не распознан'}. Никаких нажатий не выполнялось.")
+
+
 def interpret_task(instruction):
     text=norm(instruction)
     selected=[]
+    if any(x in text for x in ("диагностик","проверь экран","что на экране","распознай экран","screen status","diagnose screen")):
+        selected.append("screen_diagnostics")
     if any(x in text for x in ("офлайн","offline","сбор продукции","награда","значок зерна","собери ресурсы","ресурс","ресурсы","производств","собери город","collect resources","gather resources")):
         selected.append("offline_production")
     intents={
@@ -723,6 +743,14 @@ def execute_task(instruction, activities):
     completed=[]
     pending=[]
     for key in selected:
+        if key=="screen_diagnostics":
+            try:
+                status,result=diagnose_game_screen()
+                if status=="completed": completed.append(result)
+                else: pending.append(result)
+            except Exception as e:
+                pending.append("Диагностика экрана: "+str(e)[:300])
+            continue
         if key=="offline_production":
             pending.append("Сбор производства пока отключён: распознавание верхней панели по OCR не подтверждает назначение кнопки. Нужна отдельная проверенная модель экрана.")
             continue
