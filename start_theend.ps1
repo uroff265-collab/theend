@@ -46,10 +46,24 @@ foreach ($RequiredFile in @($Agent, $Vision)) {
   }
 }
 $AgentText = Get-Content -Raw -Encoding UTF8 $Agent
-if ($AgentText -notmatch "TheEnd Agent v19" -or $AgentText -notmatch "find_visual_resource_badges") {
-  throw "Downloaded agent is not the expected V19 diagnostics build. Refusing to start an outdated or incomplete file."
+# Validate the exact detector revision, not just a generic V19 label.
+$RequiredMarkers = @(
+  "TheEnd Agent v19",
+  "def find_visual_resource_badges(png):",
+  "Диагностика значка: поиск по игровому полю",
+  "порог действия 0.720 + подтверждение двумя кадрами"
+)
+foreach ($Marker in $RequiredMarkers) {
+  if (-not $AgentText.Contains($Marker)) {
+    throw "Agent source validation failed: missing marker '$Marker'. The downloaded file is not the approved build."
+  }
 }
-Write-Host "Verified agent build: V19 wheat diagnostics" -ForegroundColor Green
+if ($AgentText.Contains("Диагностика пшеницы:") -or $AgentText.Contains("порог 0.600")) {
+  throw "Agent source validation failed: obsolete wheat detector detected. Refusing to launch."
+}
+$AgentHash = (Get-FileHash -Algorithm SHA256 $Agent).Hash
+Write-Host "Verified agent build: V19 visual detector | SHA256: $AgentHash" -ForegroundColor Green
+Write-Host "Agent path: $Agent"
 Write-Host "Agent files:"
 Get-Item $Agent, $Vision | Select-Object Name, Length | Format-Table -AutoSize
 & py -3 -c "import os,sys; sys.path.insert(0, r'$Folder'); import theend_vision; print('Vision module loaded:', os.path.basename(theend_vision.__file__))"
