@@ -2,6 +2,16 @@ name: TheEnd Supervisor audit
 
 on:
   workflow_dispatch:
+    inputs:
+      run_ai:
+        description: "Run the optional paid AI review (requires API credits)"
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches: [main, feature/theend-supervisor-mvp]
+  schedule:
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
@@ -12,8 +22,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  audit:
-    name: Independent AI security and reliability audit
+  static:
+    name: Free offline security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run free static audit
+        run: python supervisor/static_audit.py
+
+  ai:
+    name: Optional paid AI review
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ai == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -23,7 +48,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Run Supervisor
+      - name: Run AI Supervisor
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           THEEND_SUPERVISOR_MODEL: gpt-6.2-sol
