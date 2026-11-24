@@ -1,5 +1,6 @@
 const express = require("express");
 const { Pool } = require("pg");
+const { initializeCoinDatabase, registerCoinRoutes } = require("./coin");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 10000;
@@ -19,6 +20,7 @@ const pool = new Pool({
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "5mb" }));
+registerCoinRoutes(app, pool);
 
 async function initializeDatabase() {
   await pool.query(`
@@ -546,6 +548,7 @@ app.get("/", (_req, res) => {
 async function start() {
   try {
     await initializeDatabase();
+    await initializeCoinDatabase(pool);
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`TheEnd server listening on port ${PORT}`);
     });
