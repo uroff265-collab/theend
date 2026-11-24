@@ -64,7 +64,6 @@ set +x
 THEEND_REMOTE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export THEEND_REMOTE_TOKEN
 echo "::add-mask::$THEEND_REMOTE_TOKEN"
-printf '%s\\n' "${URL:-}" > /tmp/theend-cloud-session-link.txt
 set -x
 python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
 REMOTE_PID=$!
@@ -84,6 +83,7 @@ for i in $(seq 1 90); do
 done
 if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "Public SSH tunnel URL was not created"; exit 1; fi
 echo "CHECKPOINT_TUNNEL_CREATED $URL"
+printf '%s\\n' "$URL/?k=$THEEND_REMOTE_TOKEN" > /tmp/theend-cloud-session-link.txt
 
 # Verify the public URL once. Repeated probes trigger throttling on free tunnel services.
 if ! curl -fsS --max-time 45 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png ||
