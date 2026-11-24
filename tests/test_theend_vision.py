@@ -1,6 +1,6 @@
 import unittest
 
-from theend_vision import UINode, analyze_screen, choose_action, parse_hierarchy
+from theend_vision import UINode, analyze_screen, choose_action, parse_hierarchy, classify_screen, suggest_quest_actions
 
 
 class VisionTests(unittest.TestCase):
@@ -75,6 +75,30 @@ class VisionTests(unittest.TestCase):
     def test_analyze_screen_requires_valid_dimensions(self):
         with self.assertRaises(ValueError):
             analyze_screen([], 0, 1600)
+
+
+    def test_classifies_quest_panel_from_distinctive_title(self):
+        result = classify_screen([
+            {"text": "Ежедневные задания", "confidence": 92},
+            {"text": "Соберите 3000000 древесины", "confidence": 88},
+        ])
+        self.assertEqual(result["type"], "quest_panel")
+        self.assertGreaterEqual(result["confidence"], 0.65)
+
+    def test_ambiguous_screen_stays_unknown(self):
+        result = classify_screen([{"text": "Получить", "confidence": 90}])
+        self.assertEqual(result["type"], "unknown")
+
+    def test_quest_action_suggestions_do_not_include_coordinates(self):
+        result = suggest_quest_actions([
+            {"text": "Забрать награду", "confidence": 95, "x": 120, "y": 300},
+            {"text": "Сумка", "confidence": 98, "x": 20, "y": 1500},
+            {"text": "Получить", "confidence": 40, "x": 200, "y": 500},
+        ])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["label"], "Забрать награду")
+        self.assertNotIn("x", result[0])
+        self.assertNotIn("y", result[0])
 
 
 if __name__ == "__main__":
