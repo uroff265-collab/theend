@@ -39,6 +39,8 @@ adb exec-out screencap -p > /tmp/theend-cloud-screen.png
 test -s /tmp/theend-cloud-screen.png
 echo "ANDROID_EMULATOR_READY Android $ANDROID_VERSION"
 
+THEEND_REMOTE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export THEEND_REMOTE_TOKEN
 python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
 REMOTE_PID=$!
 sleep 2
@@ -46,7 +48,7 @@ kill -0 "$REMOTE_PID"
 # Use localhost.run SSH reverse forwarding instead of Cloudflare Quick Tunnel,
 # which currently rejects account-less tunnel creation with HTTP 429.
 ssh -V
-ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:8765 nokey@localhost.run >/tmp/theend-tunnel.log 2>&1 &
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:8765 nokey@localhost.run >/tmp/theend-tunnel.log 2>&1 &
 TUNNEL_PID=$!
 URL=""
 for i in $(seq 1 90); do
@@ -60,7 +62,7 @@ if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "Public SSH tunnel URL w
 echo ""
 echo "=============================================="
 echo "THEEND CLOUD ANDROID IS READY"
-echo "OPEN THIS LINK: $URL/?k=cloudflare-otp-protected"
+echo "OPEN THIS LINK: $URL/?k=$THEEND_REMOTE_TOKEN"
 echo "The page requires the private access key in the link."
 echo "Keep this workflow running while using the emulator."
 echo "=============================================="
