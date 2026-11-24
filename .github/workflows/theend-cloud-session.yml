@@ -8,6 +8,7 @@ on:
       - 'tools/cloud_android_remote.py'
       - 'tools/start_cloud_session.sh'
       - 'tools/boot_cloud_android.sh'
+      - 'server.js'
   workflow_dispatch:
 
 permissions:
