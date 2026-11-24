@@ -12,6 +12,13 @@ Invoke-WebRequest "$Repo/install_theend.ps1" -OutFile $Setup
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
 if ($LASTEXITCODE -ne 0) { throw "TheEnd setup failed. See the setup messages above." }
 
+# Make OCR language data available to the agent process (setup runs in a child PowerShell).
+$env:TESSDATA_PREFIX = Join-Path $env:LOCALAPPDATA "TheEnd\tessdata"
+$TesseractDir = "C:\Program Files\Tesseract-OCR"
+if (Test-Path (Join-Path $TesseractDir "tesseract.exe")) {
+  $env:PATH = $TesseractDir + ";" + $env:PATH
+}
+
 # Stop only older TheEnd agent processes, not unrelated Python programs.
 try {
   $old = Get-CimInstance Win32_Process | Where-Object {
