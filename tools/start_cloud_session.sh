@@ -1,13 +1,64 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-adb wait-for-device
+diagnostics() {
+  rc=$?
+  echo "THEEND_STARTUP_ERROR exit_code=$rc line=${BASH_LINENO[0]:-unknown} command=${BASH_COMMAND:-unknown}"
+  echo "---- adb version ----"
+  adb version || true
+  echo "---- adb devices ----"
+  adb devices -l || true
+  echo "---- emulator state ----"
+  adb get-state || true
+  echo "---- emulator boot property ----"
+  adb shell getprop sys.boot_completed || true
+  echo "---- remote server log ----"
+  cat /tmp/theend-remote.log 2>/dev/null || true
+  echo "---- cloudflared log ----"
+  cat /tmp/theend-tunnel.log 2>/dev/null || true
+}
+trap diagnostics ERR
+set -x
+
+echo "THEEND_ADB_DIAGNOSTICS_BEGIN"
+adb version
+adb start-server
+adb devices -l
+
+# Wait for the emulator transport and Android boot to become usable.
+connected=0
+for i in $(seq 1 60); do
+  if adb get-state >/dev/null 2>&1; then
+    connected=1
+    break
+  fi
+  adb devices -l || true
+  sleep 2
+done
+if [ "$connected" -ne 1 ]; then
+  echo "ADB_DEVICE_NEVER_BECAME_READY"
+  exit 1
+fi
+
+booted=0
+for i in $(seq 1 90); do
+  state="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+  if [ "$state" = "1" ]; then
+    booted=1
+    break
+  fi
+  sleep 2
+done
+if [ "$booted" -ne 1 ]; then
+  echo "ANDROID_BOOT_DID_NOT_COMPLETE"
+  exit 1
+fi
+
 ANDROID_VERSION="$(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb shell wm size 1080x1920
 adb shell input keyevent 82 || true
-# Open the Last Asylum Play Store listing on the cloud device.
-adb shell am start -a android.intent.action.VIEW -d 'market://details?id=com.phs.global' || true
-sleep 8
+# This emulator image uses google_apis (not the Play Store image).
+# Keep the remote session usable; the game can be installed only from an official source.
 adb exec-out screencap -p > /tmp/theend-cloud-screen.png
 test -s /tmp/theend-cloud-screen.png
 echo "ANDROID_EMULATOR_READY Android $ANDROID_VERSION"
@@ -47,7 +98,7 @@ echo "=============================================="
 echo "THEEND CLOUD ANDROID IS READY"
 echo "OPEN THIS LINK: $URL/?k=cloudflare-otp-protected"
 echo "Cloudflare will send a one-time PIN to the allowed email."
-echo "Install Last Asylum from Play Store and sign in."
+echo "Sign in only through the official game/app source."
 echo "Keep this workflow running while using the emulator."
 echo "=============================================="
 echo ""
