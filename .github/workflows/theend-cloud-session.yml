@@ -28,7 +28,7 @@ jobs:
       - name: Install cloud emulator tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl python3 openssh-client
+          sudo apt-get install -y curl python3 openssh-client sshpass
       - name: Set up Android SDK command-line tools
         uses: android-actions/setup-android@v3
         with:
