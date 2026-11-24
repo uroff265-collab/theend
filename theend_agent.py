@@ -305,8 +305,14 @@ def find_collection(png, words):
         label=("production bubble "+amount["text"]) if amount else "green resource bubble"
         confidence=float(amount["conf"]) if amount else float(green*100)
         candidates.append({"text":label,"x":int(cx),"y":int(cy),"conf":confidence})
-    if not candidates: return None
-    return max(candidates,key=lambda z:z["conf"])
+    # Return every distinct candidate from this single screenshot, strongest first.
+    candidates.sort(key=lambda z:z["conf"],reverse=True)
+    unique=[]
+    for item in candidates:
+        if all(abs(item["x"]-old["x"])>max(18,rad*0.55) or
+               abs(item["y"]-old["y"])>max(18,rad*0.55) for old in unique):
+            unique.append(item)
+    return unique
 
 
 # Cropped from the actual Last Asylum screenshot: wheat icon inside floating green reward badge.
@@ -370,51 +376,60 @@ PENDING_WHEAT_TARGET=None
 WHEAT_CONFIRMATIONS=0
 
 def run_visual_resource_collection():
-    """Detect green grass/leaf resource badges by badge shape and color."""
+    """Scan all visible green resource bubbles in one frame; tap and verify one by one."""
     global PENDING_WHEAT_TARGET,WHEAT_CONFIRMATIONS
     try:
         png=screen_png()
-        # Unity has no useful accessibility labels/OCR for this control.
-        # Detect the white reward ring and green plant artwork instead of wheat.
-        target=find_collection(png,[])
+        targets=find_collection(png,[])
         now=time.time()
-        if not target:
+        if not targets:
             if now-LAST_WHEAT_DIAG>=15:
                 print(time.strftime("%H:%M:%S"),
-                      "Поиск травы: круглых наградных значков с зелёным ресурсом не найдено.")
+                      "Поиск ресурсов: на текущем кадре подходящих значков не найдено.")
                 LAST_WHEAT_DIAG=now
             PENDING_WHEAT_TARGET=None
             WHEAT_CONFIRMATIONS=0
             return
         w,h=get_screen_size()
-        if PENDING_WHEAT_TARGET and abs(target["x"]-PENDING_WHEAT_TARGET["x"])<w*0.035 and abs(target["y"]-PENDING_WHEAT_TARGET["y"])<h*0.035:
-            WHEAT_CONFIRMATIONS+=1
-        else:
-            PENDING_WHEAT_TARGET=target
-            WHEAT_CONFIRMATIONS=1
-        if WHEAT_CONFIRMATIONS<3:
+        print(time.strftime("%H:%M:%S"),"Один проход сканирования:",
+              len(targets),"кандидат(ов):",
+              "; ".join(f'({z["x"]},{z["y"]}) {z["conf"]:.1f}%' for z in targets[:8]))
+        collected=0
+        # A candidate is clicked only if it is not on cooldown. After each tap,
+        # take a fresh frame and verify that the same badge disappeared/changed.
+        for target in targets[:5]:
+            key=f'{round(target["x"]/w*100)}:{round(target["y"]/h*100)}'
+            if time.time()-LAST_VISUAL_TAPS.get(key,0)<120:
+                continue
+            print(time.strftime("%H:%M:%S"),"Пробую собрать ресурс:",
+                  f'({target["x"]},{target["y"]})')
+            tap(target["x"],target["y"])
+            LAST_VISUAL_TAPS[key]=time.time()
+            time.sleep(1.0)
+            after_targets=find_collection(screen_png(),[])
+            still=any(abs(z["x"]-target["x"])<w*.04
+                      and abs(z["y"]-target["y"])<h*.04
+                      for z in after_targets)
+            if still:
+                print(time.strftime("%H:%M:%S"),
+                      "Сбор НЕ подтверждён: значок остался на месте; повтор заблокирован на 120 секунд.")
+                # Do not tap other ambiguous bubbles after a failed verification.
+                break
+            collected+=1
             print(time.strftime("%H:%M:%S"),
-                  "Найден зелёный значок ресурса; жду подтверждения:",
-                  f'({target["x"]},{target["y"]}) зелёная область={target["conf"]:.1f}%')
-            return
-        key=f'{round(target["x"]/w*100)}:{round(target["y"]/h*100)}'
-        if now-LAST_VISUAL_TAPS.get(key,0)<120:
-            return
-        print(time.strftime("%H:%M:%S"),"Подтверждён значок травы/зелёного ресурса:",
-              f'({target["x"]},{target["y"]})',"| подтверждений:",WHEAT_CONFIRMATIONS)
-        tap(target["x"],target["y"])
-        LAST_VISUAL_TAPS[key]=now
+                  "Визуально подтверждено: значок исчез или изменился после нажатия.")
+            # The map can shift after collection; refresh candidates before next tap.
+            if collected<5:
+                targets=after_targets
+                if not targets:
+                    break
+                # Restarting on the refreshed frame is handled by the next loop iteration.
+        print(time.strftime("%H:%M:%S"),"Итог цикла сбора:",
+              "подтверждено",collected,"| найдено изначально",len(targets))
         PENDING_WHEAT_TARGET=None
         WHEAT_CONFIRMATIONS=0
-        time.sleep(1.2)
-        after=find_collection(screen_png(),[])
-        still=bool(after and abs(after["x"]-target["x"])<w*.04
-                   and abs(after["y"]-target["y"])<h*.04)
-        print(time.strftime("%H:%M:%S"),
-              "Значок остался после нажатия; повтор заблокирован на 120 секунд." if still
-              else "Значок исчез или изменился после нажатия; визуальная проверка выполнена.")
     except Exception as e:
-        print(time.strftime("%H:%M:%S"),"Визуальный сбор травы:",str(e)[:200])
+        print(time.strftime("%H:%M:%S"),"Визуальный сбор ресурсов:",str(e)[:200])
 
 
 def tap(x,y):
