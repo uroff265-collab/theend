@@ -8,7 +8,7 @@ if [ -z "$SDK_ROOT" ]; then SDK_ROOT="$(printenv ANDROID_HOME || true)"; fi
 if [ -z "$SDK_ROOT" ]; then SDK_ROOT="/usr/local/lib/android/sdk"; fi
 export ANDROID_HOME="$SDK_ROOT"
 export ANDROID_SDK_ROOT="$SDK_ROOT"
-export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
 
 SDKMANAGER="$(command -v sdkmanager || true)"
 AVDMANAGER="$(command -v avdmanager || true)"
@@ -18,10 +18,9 @@ fi
 if [ -z "$AVDMANAGER" ]; then
   AVDMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name avdmanager -print -quit 2>/dev/null || true)"
 fi
-EMULATOR="$(command -v emulator || true)"
 ADB="$(command -v adb || true)"
-if [ -z "$SDKMANAGER" ] || [ -z "$AVDMANAGER" ] || [ -z "$EMULATOR" ] || [ -z "$ADB" ]; then
-  echo "ANDROID_SDK_TOOLS_MISSING sdk=$SDKMANAGER avd=$AVDMANAGER emulator=$EMULATOR adb=$ADB"
+if [ -z "$SDKMANAGER" ] || [ -z "$AVDMANAGER" ] || [ -z "$ADB" ]; then
+  echo "ANDROID_SDK_TOOLS_MISSING sdk=$SDKMANAGER avd=$AVDMANAGER adb=$ADB"
   exit 1
 fi
 
@@ -32,6 +31,14 @@ set +o pipefail
 yes | "$SDKMANAGER" --licenses >/dev/null
 set -o pipefail
 "$SDKMANAGER" --install "platform-tools" "platforms;android-30" "emulator" "$IMAGE" --channel=0
+EMULATOR="$(command -v emulator || true)"
+if [ -z "$EMULATOR" ] || [ ! -x "$EMULATOR" ]; then
+  EMULATOR="$SDK_ROOT/emulator/emulator"
+fi
+if [ ! -x "$EMULATOR" ]; then
+  echo "ANDROID_EMULATOR_BINARY_MISSING path=$EMULATOR"
+  exit 1
+fi
 echo no | "$AVDMANAGER" create avd --force -n theend-api30 --package "$IMAGE" --device pixel_2
 
 if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
