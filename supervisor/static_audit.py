@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Free, offline TheEnd Supervisor checks. No network calls or API key required."""
+import json
 import os
+import urllib.error
+import urllib.request
 import re
 import subprocess
 from pathlib import Path
