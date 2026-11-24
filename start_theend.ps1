@@ -1,7 +1,7 @@
 # TheEnd Windows / LDPlayer launcher. ASCII-only for Windows PowerShell 5.1.
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$Build = "09e1bb8703fd01e050d46727e36715519ef363d3"
+$Build = "9749c13bfe6b78a16a300a33b0916b2343b4620c"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/$Build"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Folder
@@ -42,7 +42,7 @@ try {
   }
 
   $AgentText = Get-Content -Raw -Encoding UTF8 $Agent
-  foreach ($Marker in @("TheEnd Agent v19", "def find_visual_resource_badges(png):", "0.720", "def diagnose_game_screen()")) {
+  foreach ($Marker in @("TheEnd Agent v19", "def find_visual_resource_badges(png):", "0.620", "def diagnose_game_screen()")) {
     if (-not $AgentText.Contains($Marker)) {
       throw "Agent validation failed. Missing marker: $Marker"
     }
