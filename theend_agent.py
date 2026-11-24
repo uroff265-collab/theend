@@ -366,26 +366,47 @@ def find_visual_resource_badges(png):
     return unique
 
 LAST_VISUAL_TAPS={}
+PENDING_WHEAT_TARGET=None
+WHEAT_CONFIRMATIONS=0
+
 def run_visual_resource_collection():
+    global PENDING_WHEAT_TARGET,WHEAT_CONFIRMATIONS
     try:
-        targets=find_visual_resource_badges(screen_png())
-        if not targets: return
+        candidates=find_visual_resource_badges(screen_png())
+        # Keep weak matches for diagnostics, but never act on them.
+        eligible=[z for z in candidates if z["confidence"]>=0.72]
+        if not eligible:
+            PENDING_WHEAT_TARGET=None
+            WHEAT_CONFIRMATIONS=0
+            return
+        target=eligible[0]
+        w,h=get_screen_size()
+        if PENDING_WHEAT_TARGET and abs(target["x"]-PENDING_WHEAT_TARGET["x"])<w*0.025 and abs(target["y"]-PENDING_WHEAT_TARGET["y"])<h*0.025:
+            WHEAT_CONFIRMATIONS+=1
+        else:
+            PENDING_WHEAT_TARGET=target
+            WHEAT_CONFIRMATIONS=1
+        if WHEAT_CONFIRMATIONS<2:
+            print(time.strftime("%H:%M:%S"),"Кандидат пшеницы пока не нажимаю: жду подтверждение следующего кадра.",
+                  f'позиция=({target["x"]},{target["y"]}) score={target["confidence"]}')
+            return
         now=time.time()
-        for target in targets:
-            w,h=get_screen_size()
-            key=f'{round(target["x"]/w*100)}:{round(target["y"]/h*100)}'
-            if now-LAST_VISUAL_TAPS.get(key,0)<120: continue
-            print(time.strftime("%H:%M:%S"),"Визуальный сбор: значок пшеницы",
-                  f'({target["x"]},{target["y"]})',"совпадение",target["confidence"])
-            tap(target["x"],target["y"])
-            LAST_VISUAL_TAPS[key]=now
-            time.sleep(1.2)
-            after=find_visual_resource_badges(screen_png())
-            still=any(abs(z["x"]-target["x"])<w*.04 and abs(z["y"]-target["y"])<h*.04 for z in after)
-            print(time.strftime("%H:%M:%S"),
-                  "Значок остался; повтор заблокирован на 120 секунд." if still
-                  else "Значок исчез после нажатия; визуальный сбор подтверждён.")
-            break
+        key=f'{round(target["x"]/w*100)}:{round(target["y"]/h*100)}'
+        if now-LAST_VISUAL_TAPS.get(key,0)<120: return
+        print(time.strftime("%H:%M:%S"),"Подтверждённый значок пшеницы:",
+              f'({target["x"]},{target["y"]})',"совпадение",target["confidence"],
+              "| подтверждений:",WHEAT_CONFIRMATIONS)
+        tap(target["x"],target["y"])
+        LAST_VISUAL_TAPS[key]=now
+        PENDING_WHEAT_TARGET=None
+        WHEAT_CONFIRMATIONS=0
+        time.sleep(1.2)
+        after=find_visual_resource_badges(screen_png())
+        still=any(abs(z["x"]-target["x"])<w*.04 and abs(z["y"]-target["y"])<h*.04
+                  and z["confidence"]>=0.72 for z in after)
+        print(time.strftime("%H:%M:%S"),
+              "Значок остался после нажатия; повтор заблокирован на 120 секунд." if still
+              else "Значок исчез после нажатия; визуальный сбор подтверждён.")
     except Exception as e:
         print(time.strftime("%H:%M:%S"),"Визуальный сбор:",str(e)[:200])
 
