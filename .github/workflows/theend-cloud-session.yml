@@ -1,6 +1,11 @@
 name: TheEnd cloud game session
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/theend-cloud-session.yml'
+      - 'tools/cloud_android_remote.py'
   workflow_dispatch:
     inputs:
       access_email:
@@ -18,7 +23,7 @@ jobs:
     timeout-minutes: 350
     env:
       ANDROID_I_WANT_MY_TCG: yes
-      ACCESS_EMAIL: ${{ inputs.access_email }}
+      ACCESS_EMAIL: ${{ inputs.access_email || 'uroff265@gmail.com' }}
       THEEND_REMOTE_TOKEN: cloudflare-otp-protected
     steps:
       - uses: actions/checkout@v4
