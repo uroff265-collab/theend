@@ -140,7 +140,7 @@ def recognize(png):
                     try:
                         conf=float(d["conf"][i]); x=int(d["left"][i]); y=int(d["top"][i]); w=int(d["width"][i]); h=int(d["height"][i])
                     except (ValueError,TypeError,KeyError): continue
-                    if t and conf>=65 and w>0 and h>0:
+                    if t and conf>=45 and w>0 and h>0:
                         words.append({"text":t,"x":round((x+w/2)/scale),"y":round((y+h/2)/scale),"w":round(w/scale),"h":round(h/scale),"conf":conf})
                 if sum(z["conf"] for z in words)>sum(z["conf"] for z in best): best=words
             except pytesseract.pytesseract.TesseractNotFoundError:
@@ -362,6 +362,8 @@ def learn_screen():
             print(time.strftime("%H:%M:%S"),"Распознан экран:",screen_info.get("type","unknown"),
                   "| уверенность:",screen_info.get("confidence",0),
                   "| признаки:",", ".join(screen_info.get("evidence",[])) or "нет")
+            if screen_info.get("type") == "unknown":
+                print("OCR диагностика:", " | ".join(line["text"] for line in screen_state.get("lines",[])[:24]) or "текст не распознан")
             suggestions=screen_state.get("action_suggestions",[])
             if suggestions:
                 print("Кандидаты кнопок задания (пока без нажатия):",
