@@ -148,8 +148,20 @@ def recognize(png):
                 raise RuntimeError("Tesseract OCR не найден. Установи его и перезапусти PowerShell.")
             except Exception as e:
                 errors.append(f"{lang}/psm{psm}: {type(e).__name__}: {e}")
-    if not best and errors:
-        print(time.strftime("%H:%M:%S"),"OCR ошибка:", " | ".join(errors[:3]))
+    if not best and not getattr(recognize,"_reported",False):
+        try:
+            raw_text=pytesseract.image_to_string(im,lang=langs[0],
+                config=(TESSDATA_ARGS+" --oem 3 --psm 3").strip())
+        except Exception as e:
+            raw_text=""
+            errors.append("image_to_string: "+type(e).__name__+": "+str(e))
+        gray_array=np.asarray(im) if np is not None else None
+        pixel_info=("size="+str(im.size))
+        if gray_array is not None:
+            pixel_info += " gray_min="+str(int(gray_array.min()))+" gray_max="+str(int(gray_array.max()))+" gray_std="+str(round(float(gray_array.std()),1))
+        print(time.strftime("%H:%M:%S"),"OCR пустой результат;",pixel_info,
+              "| text:",repr(raw_text[:500]),"| errors:", " | ".join(errors[:3]) or "none")
+        recognize._reported=True
     elif best and not getattr(recognize,"_reported",False):
         print(time.strftime("%H:%M:%S"),"OCR проверка: распознано слов:",len(best),
               "| примеры:", " ".join(z["text"] for z in best[:18]))
