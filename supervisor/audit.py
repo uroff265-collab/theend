@@ -21,7 +21,7 @@ PATTERNS = [
     (re.compile(r"(?is)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
      "[REDACTED_PRIVATE_KEY_BLOCK]"),
     (re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9._~+/=-]+"), r"\1[REDACTED]"),
-    (re.compile(r"(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|password|passwd)\s*[:=]\s*['\\"]?)[^\s'\\"]{8,}"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|password|passwd)\s*[:=]\s*)[^\s,;]{8,}"), r"\1[REDACTED]"),
     (re.compile(r"(?i)(postgres(?:ql)?://[^:\s/]+:)[^@\s]+(@)"), r"\1[REDACTED]\2"),
     (re.compile(r"(?i)(https?://[^:/\s]+:)[^@/\s]+(@)"), r"\1[REDACTED]\2"),
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
