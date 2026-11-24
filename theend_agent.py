@@ -82,7 +82,7 @@ def configure_ocr():
     model_dirs.extend([os.path.join(os.path.dirname(pytesseract.pytesseract.tesseract_cmd),"tessdata")])
     for folder in model_dirs:
         if os.path.isdir(folder) and any(os.path.isfile(os.path.join(folder,n+".traineddata")) for n in ("eng","rus")):
-            TESSDATA_ARGS='--tessdata-dir "'+folder+'"'
+            TESSDATA_ARGS='--tessdata-dir '+folder
             break
     try:
         available=pytesseract.get_languages(config=TESSDATA_ARGS)
