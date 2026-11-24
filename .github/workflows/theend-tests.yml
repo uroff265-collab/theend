@@ -93,16 +93,7 @@ jobs:
             adb shell getprop ro.build.version.release
             adb shell wm size 1080x1920
             adb exec-out screencap -p > /tmp/theend-cloud-screen.png
-            python - <<'PY'
-            from PIL import Image
-            import cv2, numpy as np
-            p='/tmp/theend-cloud-screen.png'
-            im=Image.open(p)
-            im.verify()
-            frame=cv2.imdecode(np.fromfile(p,dtype=np.uint8),cv2.IMREAD_COLOR)
-            assert frame is not None and frame.size > 0, 'OpenCV could not read emulator screenshot'
-            print('ANDROID_EMULATOR_OK', frame.shape, 'screenshot_bytes=', __import__('os').path.getsize(p))
-            PY
+            python -c "from PIL import Image; import cv2, numpy as np, os; p='/tmp/theend-cloud-screen.png'; im=Image.open(p); im.verify(); frame=cv2.imdecode(np.fromfile(p,dtype=np.uint8),cv2.IMREAD_COLOR); assert frame is not None and frame.size > 0, 'OpenCV could not read emulator screenshot'; print('ANDROID_EMULATOR_OK', frame.shape, 'screenshot_bytes=', os.path.getsize(p))"
       - name: Upload cloud emulator screenshot
         if: always()
         uses: actions/upload-artifact@v4
