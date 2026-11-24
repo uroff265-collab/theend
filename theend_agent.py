@@ -124,45 +124,106 @@ def get_screen_size():
     raise RuntimeError("Не удалось определить размер экрана через ADB (wm size и PNG). Проверь подключение LDPlayer.")
 
 def recognize(png):
-    im=Image.open(io.BytesIO(png)).convert("RGB")
-    scale=1.5 if im.width<1200 else 1.2
-    im=im.resize((int(im.width*scale),int(im.height*scale)))
-    im=ImageOps.grayscale(im)
-    im=ImageEnhance.Contrast(im).enhance(1.8).filter(ImageFilter.SHARPEN)
-    buf=io.BytesIO(); im.save(buf,format="PNG")
+    """OCR fallback pipeline for Unity game screens with small, outlined HUD text."""
+    source=Image.open(io.BytesIO(png)).convert("RGB")
+    scale=2.0 if source.width<1600 else 1.5
+    source=source.resize((int(source.width*scale),int(source.height*scale)),Image.Resampling.LANCZOS)
+    gray=ImageOps.grayscale(source)
+    gray=ImageOps.autocontrast(gray,cutoff=1)
+    gray=ImageEnhance.Sharpness(ImageEnhance.Contrast(gray).enhance(2.0)).enhance(1.5)
+
+    variants=[("gray",gray)]
+    # Unity text often has thin outlines over a textured background. Add
+    # thresholded and inverted variants only when the normal OCR finds nothing.
+    best=[]; errors=[]; attempts=[]
+    exe=pytesseract.pytesseract.tesseract_cmd
     env=os.environ.copy()
-    langs="eng+rus"
-    best=[]; errors=[]
+
+    def run_variant(image, name, psm):
+        buf=io.BytesIO(); image.save(buf,format="PNG")
+        result=subprocess.run([exe,"stdin","stdout","-l","eng+rus",
+            "--oem","3","--psm",str(psm),"tsv"],input=buf.getvalue(),
+            capture_output=True,timeout=25,env=env)
+        if result.returncode!=0:
+            raise RuntimeError(result.stderr.decode("utf-8","replace")[:300])
+        rows=csv.DictReader(io.StringIO(result.stdout.decode("utf-8","replace")),delimiter="\t")
+        found=[]
+        for row in rows:
+            value=re.sub(r"\s+"," ",(row.get("text") or "")).strip()
+            try:
+                conf=float(row.get("conf","-1"))
+                x=int(row["left"]); y=int(row["top"]); w=int(row["width"]); h=int(row["height"])
+            except (ValueError,TypeError,KeyError):
+                continue
+            # Low-confidence words are retained for screen observation only.
+            # Any action still requires exact labels and high confidence.
+            if value and conf>=8 and w>0 and h>0:
+                found.append({"text":value,"x":round((x+w/2)/scale),
+                    "y":round((y+h/2)/scale),"w":round(w/scale),
+                    "h":round(h/scale),"conf":conf})
+        return found
+
     for psm in (11,6,12):
         try:
-            result=subprocess.run([pytesseract.pytesseract.tesseract_cmd,"stdin","stdout","-l",langs,
-                "--oem","3","--psm",str(psm),"tsv"],input=buf.getvalue(),
-                capture_output=True,timeout=30,env=env)
-            if result.returncode!=0:
-                raise RuntimeError(result.stderr.decode("utf-8","replace"))
-            rows=csv.DictReader(io.StringIO(result.stdout.decode("utf-8","replace")),delimiter="\t")
-            words=[]
-            for row in rows:
-                t=re.sub(r"\s+"," ",(row.get("text") or "")).strip()
-                try:
-                    conf=float(row.get("conf","-1")); x=int(row["left"]); y=int(row["top"]); w=int(row["width"]); h=int(row["height"])
-                except (ValueError,TypeError,KeyError): continue
-                if t and conf>=25 and w>0 and h>0:
-                    words.append({"text":t,"x":round((x+w/2)/scale),"y":round((y+h/2)/scale),
-                        "w":round(w/scale),"h":round(h/scale),"conf":conf})
-            if sum(z["conf"] for z in words)>sum(z["conf"] for z in best): best=words
+            found=run_variant(gray,"gray",psm)
+            attempts.append((f"gray/psm{psm}",len(found)))
+            if sum(z["conf"] for z in found)>sum(z["conf"] for z in best):
+                best=found
+            if len(best)>=3:
+                break
         except Exception as e:
-            errors.append(f"psm{psm}: {type(e).__name__}: {e}")
+            errors.append(f"gray/psm{psm}: {type(e).__name__}: {e}")
+
+    if not best:
+        fallback=[]
+        if cv2 is not None and np is not None:
+            arr=np.asarray(gray)
+            try:
+                otsu=cv2.threshold(arr,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
+                adaptive=cv2.adaptiveThreshold(arr,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                    cv2.THRESH_BINARY,31,11)
+                fallback=[("otsu",Image.fromarray(otsu)),
+                          ("otsu_inv",Image.fromarray(255-otsu)),
+                          ("adaptive",Image.fromarray(adaptive)),
+                          ("adaptive_inv",Image.fromarray(255-adaptive))]
+            except Exception as e:
+                errors.append("preprocess: "+str(e)[:200])
+        for name,image in fallback:
+            for psm in (11,6):
+                try:
+                    found=run_variant(image,name,psm)
+                    attempts.append((f"{name}/psm{psm}",len(found)))
+                    if sum(z["conf"] for z in found)>sum(z["conf"] for z in best):
+                        best=found
+                    if len(best)>=3:
+                        break
+                except Exception as e:
+                    errors.append(f"{name}/psm{psm}: {type(e).__name__}: {e}")
+            if len(best)>=3:
+                break
+
+    # Merge near-duplicate tokens from overlapping OCR layouts.
+    unique=[]
+    for word in sorted(best,key=lambda z:(-z["conf"],z["y"],z["x"])):
+        if not any(word["text"].casefold()==old["text"].casefold()
+                   and abs(word["x"]-old["x"])<max(12,word["w"])
+                   and abs(word["y"]-old["y"])<max(12,word["h"])
+                   for old in unique):
+            unique.append(word)
+    best=sorted(unique,key=lambda z:(z["y"],z["x"]))
+
     if not best and not getattr(recognize,"_reported",False):
-        gray_array=np.asarray(im) if np is not None else None
-        pixel_info=("size="+str(im.size))
+        gray_array=np.asarray(gray) if np is not None else None
+        pixel_info=("size="+str(gray.size))
         if gray_array is not None:
             pixel_info += " gray_min="+str(int(gray_array.min()))+" gray_max="+str(int(gray_array.max()))+" gray_std="+str(round(float(gray_array.std()),1))
-        print(time.strftime("%H:%M:%S"),"OCR пустой результат;",pixel_info,"| errors:", " | ".join(errors[:3]) or "none")
+        print(time.strftime("%H:%M:%S"),"OCR пустой результат;",pixel_info,
+              "| попытки:",attempts,"| errors:", " | ".join(errors[:3]) or "none")
         recognize._reported=True
     elif best and not getattr(recognize,"_reported",False):
         print(time.strftime("%H:%M:%S"),"OCR проверка: распознано слов:",len(best),
-              "| примеры:", " ".join(z["text"] for z in best[:18]))
+              "| примеры:", " ".join(z["text"] for z in best[:24]),
+              "| попытки:",attempts)
         recognize._reported=True
     return best
 
