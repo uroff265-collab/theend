@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#090a0e">
+  <title>TheEnd Coin</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#090a0e;--panel:#14161d;--gold:#e8bd62;--gold2:#ffdf91;--muted:#9295a1;--line:#292b33}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -15%,#4b3518 0,transparent 45%),var(--bg);color:#f6f3eb;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+    .wrap{width:min(100%,480px);margin:0 auto;padding:22px 18px 34px}.top{display:flex;justify-content:space-between;align-items:center;margin:8px 2px 28px}
+    .brand{font-size:14px;font-weight:900;letter-spacing:3px}.brand span{display:block;color:var(--gold);font-size:10px;letter-spacing:4px;margin-top:4px}
+    .pill{border:1px solid #51432a;background:#1d1a13;border-radius:30px;padding:8px 11px;color:var(--gold2);font-size:11px}
+    .balance{text-align:center;padding:20px 12px 8px}.eyebrow{font-size:11px;letter-spacing:2.5px;color:var(--muted);text-transform:uppercase}
+    .amount{font-size:clamp(42px,12vw,58px);font-weight:850;letter-spacing:-2px;margin:9px 0 3px;font-variant-numeric:tabular-nums}.unit{color:var(--gold);font-size:12px;letter-spacing:3px;font-weight:800}
+    .coin-area{display:grid;place-items:center;padding:27px 0 24px}
+    .coin-button{border:0;background:transparent;padding:0;cursor:pointer;touch-action:manipulation;outline:none}
+    .coin{width:206px;height:206px;border-radius:50%;display:grid;place-items:center;position:relative;background:radial-gradient(circle at 35% 27%,#fff0b9 0,#f2cf7d 13%,#c38a32 40%,#805019 68%,#e5b85c 74%,#704513 100%);box-shadow:0 0 0 8px #b47c3030,0 0 0 13px #d6a74c18,0 24px 55px #000b,inset 0 3px 7px #fff9,inset 0 -9px 17px #59350b}
+    .coin:before{content:"";position:absolute;inset:13px;border:2px solid #70471899;border-radius:50%;box-shadow:inset 0 0 0 3px #fff2}
+    .coin:after{content:"";position:absolute;inset:23px;border:1px solid #fff6;border-radius:50%}
+    .coin-mark{font-size:76px;font-weight:900;color:#714814;text-shadow:0 2px 1px #fff7,0 -2px 1px #6a3f0b;z-index:1}
+    .coin-button:active .coin{transform:scale(.95)}.coin{transition:transform .09s ease}
+    .hint{text-align:center;color:var(--muted);font-size:12px;margin-top:5px}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:20px 0}
+    .stat{background:linear-gradient(145deg,#191b23,#111319);border:1px solid var(--line);border-radius:15px;padding:15px}
+    .stat-label{color:var(--muted);font-size:11px}.stat-value{font-weight:750;font-size:18px;margin-top:7px}
+    .section{font-size:12px;font-weight:800;letter-spacing:1.5px;margin:25px 2px 11px}
+    .notice{background:#17150f;border:1px solid #51432a;border-radius:14px;padding:14px;color:#d9c69f;font-size:12px;line-height:1.55}
+    .notice b{color:var(--gold2)}.footer{text-align:center;color:#696d78;font-size:10px;margin-top:22px}
+    .status{margin:0 0 14px;padding:11px 13px;border-radius:11px;background:#17191f;color:#c9cbd2;font-size:12px;line-height:1.4}
+    .status.error{background:#2a1718;color:#ffb9b9}.hidden{display:none}
+    @media(max-width:360px){.coin{width:184px;height:184px}.coin-mark{font-size:66px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="brand">THEEND<span>COIN</span></div>
+      <div class="pill">● BETA VERSION</div>
+    </header>
+    <div id="status" class="status">Подключаем Telegram…</div>
+    <section class="balance">
+      <div class="eyebrow">ТВОЙ БАЛАНС</div>
+      <div id="balance" class="amount">—</div>
+      <div class="unit">THEEND COINS</div>
+    </section>
+    <section class="coin-area">
+      <button id="mint" class="coin-button" aria-label="Чеканить монету" disabled>
+        <div class="coin"><span class="coin-mark">₮</span></div>
+      </button>
+      <div class="hint">Нажми на монету, чтобы отчеканить +1</div>
+    </section>
+    <section class="stats">
+      <div class="stat"><div class="stat-label">За одно нажатие</div><div class="stat-value">+1 🪙</div></div>
+      <div class="stat"><div class="stat-label">Твой статус</div><div id="player" class="stat-value">Гость</div></div>
+    </section>
+    <div class="section">О ПРОЕКТЕ</div>
+    <div class="notice"><b>Тестовый запуск.</b> Сейчас монеты являются игровыми баллами и не имеют фиксированной денежной стоимости. Заявки на призы и выплаты появятся после настройки правил призового фонда и панели администратора.</div>
+    <div class="footer">THEEND COIN · Игровой баланс сохраняется на сервере</div>
+  </main>
+  <script>
+    (() => {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      const statusEl = document.getElementById("status");
+      const balanceEl = document.getElementById("balance");
+      const playerEl = document.getElementById("player");
+      const mintButton = document.getElementById("mint");
+      let initData = "";
+
+      function status(message, error=false) {
+        statusEl.textContent = message;
+        statusEl.classList.toggle("error", error);
+      }
+      async function api(path, options={}) {
+        const response = await fetch(path, {
+          ...options,
+          headers: {"Content-Type":"application/json","X-Telegram-Init-Data":initData,...(options.headers||{})}
+        });
+        const data = await response.json().catch(()=>({error:"Ошибка ответа сервера."}));
+        if (!response.ok) throw new Error(data.error || "Ошибка запроса.");
+        return data;
+      }
+      function setBalance(value) {
+        balanceEl.textContent = Number(value).toLocaleString("ru-RU");
+      }
+      async function loadProfile() {
+        const data = await api("/api/coin/me");
+        setBalance(data.balance);
+        playerEl.textContent = data.player.firstName || "Игрок";
+        mintButton.disabled = false;
+        status("Ты вошёл в TheEnd Coin. Можно чеканить монеты.");
+      }
+      mintButton.addEventListener("click", async () => {
+        if (mintButton.disabled) return;
+        mintButton.disabled = true;
+        try {
+          const data = await api("/api/coin/mint", {method:"POST",body:"{}"});
+          setBalance(data.balance);
+          status("+1 монета зачислена на твой баланс.");
+        } catch (error) {
+          status(error.message, true);
+        } finally {
+          mintButton.disabled = false;
+        }
+      });
+      if (!tg || !tg.initData) {
+        status("Открой игру из Telegram через @TheEndCoinGameBot. В обычном браузере вход недоступен.", true);
+        mintButton.disabled = true;
+        return;
+      }
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor("#090a0e");
+      tg.setBackgroundColor("#090a0e");
+      initData = tg.initData;
+      loadProfile().catch(error => status(error.message, true));
+    })();
+  </script>
+</body>
+</html>
