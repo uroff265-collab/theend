@@ -72,7 +72,7 @@ kill -0 "$REMOTE_PID"
 # Use localhost.run SSH reverse forwarding instead of Cloudflare Quick Tunnel,
 # which currently rejects account-less tunnel creation with HTTP 429.
 ssh -V
-ssh -N -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:8765 nokey@localhost.run >/tmp/theend-tunnel.log 2>&1 &
+ssh -T -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:8765 nokey@localhost.run >/tmp/theend-tunnel.log 2>&1 &
 TUNNEL_PID=$!
 URL=""
 for i in $(seq 1 90); do
