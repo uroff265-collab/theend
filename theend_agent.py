@@ -549,19 +549,6 @@ def learn_screen():
         words=recognize(png)
         im=Image.open(io.BytesIO(png))
         width,height=im.size
-        if not getattr(learn_screen,"_diagnostic_saved",False):
-            try:
-                # Save beside the running agent because Desktop can be redirected.
-                diagnostic=os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                        "TheEnd_screen_diagnostic.png")
-                im.convert("RGB").save(diagnostic,optimize=True)
-                print(time.strftime("%H:%M:%S"),"Диагностический кадр сохранён рядом с ботом:",diagnostic)
-                if os.name=="nt":
-                    try: os.startfile(diagnostic)
-                    except OSError: pass
-                learn_screen._diagnostic_saved=True
-            except Exception as e:
-                print("Не удалось сохранить диагностический кадр:",str(e)[:160])
         screen_state=analyze_screen(words,width,height)
         # Unity exposes only a generic "Game view" accessibility node.
         # Do not let that placeholder hide the OCR text that describes the real game screen.
