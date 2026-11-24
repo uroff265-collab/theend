@@ -42,7 +42,7 @@ try {
   }
 
   $AgentText = Get-Content -Raw -Encoding UTF8 $Agent
-  foreach ($Marker in @("TheEnd Agent v19", "def find_visual_resource_badges(png):", "0.720")) {
+  foreach ($Marker in @("TheEnd Agent v19", "def find_visual_resource_badges(png):", "0.720", "def diagnose_game_screen()")) {
     if (-not $AgentText.Contains($Marker)) {
       throw "Agent validation failed. Missing marker: $Marker"
     }
