@@ -51,7 +51,7 @@ try {
   Write-Host "Agent source verified. SHA256: $AgentHash" -ForegroundColor Green
 
   Write-Host "Checking Python module import..."
-  & py -3 -c 'import os,sys; sys.path.insert(0, os.getcwd()); import theend_vision; print("Vision module loaded:", os.path.basename(theend_vision.__file__))'
+  & py -3 -c "import theend_vision"
   if ($LASTEXITCODE -ne 0) { throw "Python could not import theend_vision.py." }
 
   $Adb = "C:\platform-tools\adb.exe"
