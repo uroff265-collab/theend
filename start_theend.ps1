@@ -1,6 +1,7 @@
 # TheEnd one-click launcher for Windows / LDPlayer
 $ErrorActionPreference = "Stop"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/main"
+$Build = "c2da46b1a36094b8bf525c4e709ecf74594488c0"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Folder
 
@@ -8,7 +9,7 @@ Write-Host "=== TheEnd Bot: starting ===" -ForegroundColor Cyan
 
 # Prepare OCR/OpenCV dependencies and language data on first run.
 $Setup = Join-Path $Folder "install_theend.ps1"
-Invoke-WebRequest "$Repo/install_theend.ps1" -OutFile $Setup
+Invoke-WebRequest "$Repo/install_theend.ps1`?v=$Build" -OutFile $Setup
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
 if ($LASTEXITCODE -ne 0) { throw "TheEnd setup failed. See the setup messages above." }
 
@@ -32,9 +33,9 @@ try {
 
 $Agent = Join-Path $Folder "theend_agent.py"
 Write-Host "Downloading agent files from GitHub..."
-Invoke-WebRequest "$Repo/theend_agent.py" -OutFile $Agent
+Invoke-WebRequest "$Repo/theend_agent.py`?v=$Build" -OutFile $Agent
 $Vision = Join-Path $Folder "theend_vision.py"
-Invoke-WebRequest "$Repo/theend_vision.py" -OutFile $Vision
+Invoke-WebRequest "$Repo/theend_vision.py`?v=$Build" -OutFile $Vision
 
 # Fail early with a clear message if either Python module was not downloaded.
 foreach ($RequiredFile in @($Agent, $Vision)) {
