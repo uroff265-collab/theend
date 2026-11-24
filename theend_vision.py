@@ -133,6 +133,54 @@ def execute_verified(
     return True, "ui_changed_result_unconfirmed"
 
 
+
+
+SCREEN_SIGNATURES = {
+    "base": ("сумка", "герой", "мир", "почта"),
+    "quest_panel": ("задания", "миссии", "ежедневные задания", "quests", "missions"),
+    "alliance": ("альянс", "помощь альянсу", "технологии альянса"),
+    "inventory": ("сумка", "рюкзак", "инвентарь", "inventory", "bag"),
+    "mail": ("почта", "письма", "mail"),
+    "popup": ("подтвердить", "отмена", "закрыть", "confirm", "cancel", "close"),
+}
+
+def classify_screen(lines: Iterable[dict]) -> dict:
+    """Classify a game view from independent OCR labels; observation only."""
+    normalized = [normalize(str(line.get("normalized", line.get("text", "")))) for line in lines]
+    joined = " | ".join(normalized)
+    scores = {}
+    for screen_type, markers in SCREEN_SIGNATURES.items():
+        hits = [marker for marker in markers if normalize(marker) in joined]
+        if hits:
+            scores[screen_type] = {"score": len(hits), "markers": hits}
+    if not scores:
+        return {"type": "unknown", "confidence": 0.0, "evidence": []}
+    ranked = sorted(scores.items(), key=lambda item: (item[1]["score"], item[0]), reverse=True)
+    screen_type, evidence = ranked[0]
+    distinctive = {"quest_panel": ("задания", "ежедневные задания", "missions", "quests"),
+                   "alliance": ("помощь альянсу", "технологии альянса"),
+                   "mail": ("почта", "mail")}
+    has_title = any(normalize(x) in joined for x in distinctive.get(screen_type, ()))
+    if evidence["score"] < 2 and not has_title:
+        return {"type": "unknown", "confidence": 0.0, "evidence": evidence["markers"]}
+    confidence = min(0.99, 0.55 + 0.15 * evidence["score"] + (0.1 if has_title else 0))
+    return {"type": screen_type, "confidence": round(confidence, 2), "evidence": evidence["markers"]}
+
+
+def suggest_quest_actions(lines: Iterable[dict]) -> list[dict]:
+    """Extract possible quest action labels for review; never returns coordinates."""
+    verbs = ("забрать", "получить", "выполнить", "перейти", "начать", "собрать",
+             "claim", "collect", "go", "start", "complete")
+    suggestions = []
+    for line in lines:
+        text = str(line.get("text", "")).strip()
+        confidence = float(line.get("confidence", line.get("conf", 0)) or 0)
+        normalized = normalize(text)
+        matched = [verb for verb in verbs if re.search(r"(?<![a-zа-я])" + re.escape(normalize(verb)) + r"(?![a-zа-я])", normalized)]
+        if matched and confidence >= 75:
+            suggestions.append({"label": text, "verbs": matched, "confidence": round(confidence, 1)})
+    return suggestions
+
 def analyze_screen(words: Iterable[dict], width: int, height: int) -> dict:
     """Summarize OCR observations by screen region; never produces tap coordinates."""
     if width <= 0 or height <= 0:
@@ -179,6 +227,9 @@ def analyze_screen(words: Iterable[dict], width: int, height: int) -> dict:
         if item["region"] == "top_hud" and any(char.isdigit() for char in compact):
             counters.append({"text": item["text"], "x": item["x"], "y": item["y"],
                              "confidence": item["confidence"]})
+    screen = classify_screen(lines)
+    action_suggestions = suggest_quest_actions(lines)
     return {"resolution": [width, height], "lines": lines, "navigation": navigation,
-            "quest_text": quests, "top_counters": counters,
+            "quest_text": quests, "top_counters": counters, "screen": screen,
+            "action_suggestions": action_suggestions,
             "observed_word_count": len(observations)}
