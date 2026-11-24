@@ -36,19 +36,22 @@ ANDROID_VERSION="$(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb shell wm size 1080x1920
 adb shell input keyevent 82 || true
 PLAY_STORE_APK="$(adb shell pm path com.android.vending 2>/dev/null | tr -d '\r' | head -n1 || true)"
-if [[ "$PLAY_STORE_APK" != package:* ]]; then
-  echo "PLAY_STORE_NOT_INSTALLED: use the google_apis_playstore emulator image"
-  exit 1
+if [[ "$PLAY_STORE_APK" == package:* ]]; then
+  echo "GOOGLE_PLAY_STORE_OK $PLAY_STORE_APK"
+else
+  echo "::warning::Google Play Store package com.android.vending is absent; continuing to publish Android screen for diagnosis."
+  adb shell pm list packages | grep -Ei 'vending|google' | head -n 30 || true
 fi
-echo "GOOGLE_PLAY_STORE_OK $PLAY_STORE_APK"
 if adb shell pm path com.phs.global 2>/dev/null | grep -q '^package:'; then
   echo "LAST_ASYLUM_ALREADY_INSTALLED"
   adb shell monkey -p com.phs.global -c android.intent.category.LAUNCHER 1
-else
+elif [[ "$PLAY_STORE_APK" == package:* ]]; then
   echo "LAST_ASYLUM_NOT_INSTALLED_OPENING_OFFICIAL_PLAY_STORE_LISTING"
-  adb shell am start -a android.intent.action.VIEW -d "market://details?id=com.phs.global"
+  adb shell am start -a android.intent.action.VIEW -d "market://details?id=com.phs.global" || true
+else
+  echo "LAST_ASYLUM_NOT_INSTALLED_AND_PLAY_STORE_MISSING"
 fi
-sleep 12
+sleep 5
 adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n1 || true
 adb exec-out screencap -p > /tmp/theend-cloud-screen.png
 test -s /tmp/theend-cloud-screen.png
