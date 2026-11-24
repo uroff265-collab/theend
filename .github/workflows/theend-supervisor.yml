@@ -1,0 +1,37 @@
+name: TheEnd Supervisor audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: theend-supervisor-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Independent AI security and reliability audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run Supervisor
+        env:
+          OPENAI_API_KEY: __OPENAI_SECRET__
+          THEEND_SUPERVISOR_MODEL: __MODEL_VARIABLE__
+          GITHUB_TOKEN: __GITHUB_TOKEN__
+          GITHUB_REPOSITORY: __REPOSITORY__
+          GITHUB_SHA: __COMMIT__
+        run: python supervisor/audit.py
