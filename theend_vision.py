@@ -154,6 +154,15 @@ def classify_screen(lines: Iterable[dict]) -> dict:
         if hits:
             scores[screen_type] = {"score": len(hits), "markers": hits}
     if not scores:
+        # Unity-based city view often exposes noisy OCR rather than stable menu labels.
+        # Recognize a generic game view from HUD/resource counters and lower-screen UI
+        # density, but do not treat this fallback as permission to tap anything.
+        top_hud = [line for line in lines if line.get("region") == "top_hud"
+                   and re.search(r"\\d", str(line.get("text", "")))]
+        bottom_ui = [line for line in lines if line.get("region") == "bottom_menu"]
+        if len(top_hud) >= 2 and (len(bottom_ui) >= 1 or len(normalized) >= 12):
+            return {"type": "game_view", "confidence": 0.60,
+                    "evidence": ["multiple_top_hud_counters", "unity_game_layout"]}
         return {"type": "unknown", "confidence": 0.0, "evidence": []}
     ranked = sorted(scores.items(), key=lambda item: (item[1]["score"], item[0]), reverse=True)
     screen_type, evidence = ranked[0]
