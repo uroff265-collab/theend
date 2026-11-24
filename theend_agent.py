@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """TheEnd Agent v12: accessibility-grounded guarded automation."""
-import csv, getpass, io, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
+import csv, getpass, io, json, os, platform, re, shutil, subprocess, sys, tempfile, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 from theend_vision import parse_hierarchy, choose_action, analyze_screen
 
@@ -98,10 +98,26 @@ def configure_ocr():
         raise SystemExit("Ошибка настройки OCR: "+str(e))
 
 def screen_png():
-    # Screen pixels are read into memory only; no screenshot files or uploads are created.
-    b=adb("exec-out","screencap","-p",timeout=15,binary=True)
-    if not b.startswith(b"\x89PNG"): raise RuntimeError("Некорректный кадр экрана от ADB.")
-    return b
+    # Prefer binary streaming. Some Windows/LDPlayer ADB builds return an empty
+    # or damaged PNG through exec-out, so retry through a device-side file.
+    try:
+        b=adb("exec-out","screencap","-p",timeout=20,binary=True)
+        if b.startswith(b"\x89PNG") and len(b)>4096:
+            Image.open(io.BytesIO(b)).verify()
+            return b
+    except Exception:
+        pass
+    remote="/sdcard/theend_capture.png"
+    local=os.path.join(tempfile.gettempdir(),"theend_capture.png")
+    try:
+        adb("shell","screencap","-p",remote,timeout=20)
+        subprocess.run([ADB,"-s",SERIAL,"pull",remote,local],capture_output=True,timeout=20,check=True)
+        with open(local,"rb") as f: b=f.read()
+        if not b.startswith(b"\x89PNG"): raise RuntimeError("fallback capture is not PNG")
+        Image.open(io.BytesIO(b)).verify()
+        return b
+    except Exception as e:
+        raise RuntimeError("Не удалось получить кадр экрана ни через exec-out, ни через файл: "+str(e)[:180])
 
 def get_screen_size():
     """Return active emulator resolution, falling back to PNG dimensions."""
@@ -626,8 +642,8 @@ def poll_game_task(activities):
 def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
-    if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v15 запущен | build 2026-11-24-game-view-detection")
+    if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit(r"ADB не найден: проверь C:\platform-tools\adb.exe")
+    print("TheEnd Agent v16 запущен | build 2026-11-24-adb-capture-fallback")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Безопасный режим: только контекстные кнопки Android UI; слепые координаты и OCR-сбор отключены.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
