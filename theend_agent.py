@@ -357,6 +357,15 @@ def learn_screen():
             labels=sorted(set(norm(w["text"]) for w in words if w["conf"]>=75))
         if not labels: return 0
         signature="|".join(labels[:80])
+        if signature != LAST_SCREEN_SIGNATURE:
+            screen_info=screen_state.get("screen",{})
+            print(time.strftime("%H:%M:%S"),"Распознан экран:",screen_info.get("type","unknown"),
+                  "| уверенность:",screen_info.get("confidence",0),
+                  "| признаки:",", ".join(screen_info.get("evidence",[])) or "нет")
+            suggestions=screen_state.get("action_suggestions",[])
+            if suggestions:
+                print("Кандидаты кнопок задания (пока без нажатия):",
+                      "; ".join(item["label"] for item in suggestions[:6]))
         try:
             with open(GAME_MEMORY_PATH,"r",encoding="utf-8") as f: memory=json.load(f)
             if not isinstance(memory,dict): memory={}
