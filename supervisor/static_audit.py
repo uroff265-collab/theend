@@ -88,6 +88,65 @@ def main():
         with open(summary, "a", encoding="utf-8") as stream:
             stream.write(report)
     print(f"Static audit complete: {len(findings)} possible finding(s).")
+    publish_issue(report, bool(findings))
+
+def publish_issue(report, has_findings):
+    """Publish/update one deduplicated free Supervisor issue using Actions' token."""
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not token or "/" not in repository:
+        print("GitHub issue publication skipped: Actions token/repository not available.")
+        return
+
+    title = "[TheEnd Supervisor] Static audit findings"
+    headers = {
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+    }
+    api = f"https://api.github.com/repos/{repository}/issues"
+    request = urllib.request.Request(
+        api + "?state=open&per_page=100",
+        headers=headers,
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            issues = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as error:
+        print("Supervisor could not check existing issues:", type(error).__name__)
+        return
+
+    existing = next(
+        (issue for issue in issues
+         if not issue.get("pull_request") and issue.get("title") == title),
+        None,
+    )
+    if not has_findings:
+        print("No new issue opened: no configured static-rule matches.")
+        return
+
+    body = report + "\\n\\n---\\nCommit: " + os.environ.get("GITHUB_SHA", "unknown")
+    payload = json.dumps({"title": title, "body": body}).encode("utf-8")
+    if existing:
+        url = f"{api}/{existing['number']}"
+        method = "PATCH"
+        action = "updated"
+    else:
+        url = api
+        method = "POST"
+        action = "created"
+    request = urllib.request.Request(
+        url, data=payload, headers=headers, method=method
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            issue = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as error:
+        print("Supervisor issue publication failed:", type(error).__name__)
+        return
+    print(f"Supervisor issue {action}: {issue.get('html_url', 'URL unavailable')}")
 
 if __name__ == "__main__":
     main()
