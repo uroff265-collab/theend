@@ -66,9 +66,12 @@ def configure_ocr():
     # Pin the model directory in this process so every pytesseract call uses it.
     local=os.environ.get("LOCALAPPDATA","") if os.name=="nt" else ""
     preferred=os.path.join(local,"TheEnd","tessdata") if local else ""
-    # Do not set TESSDATA_PREFIX: on Windows it can override --tessdata-dir
-    # and make Tesseract append the language filename to a quoted path.
-    os.environ.pop("TESSDATA_PREFIX", None)
+    # Tesseract's Windows build reliably reads models through TESSDATA_PREFIX.
+    # Keep the value as a plain directory path (never include quote characters).
+    if preferred and os.path.isdir(preferred):
+        os.environ["TESSDATA_PREFIX"]=preferred
+    else:
+        os.environ.pop("TESSDATA_PREFIX", None)
     if not OCR: raise SystemExit("Установи зависимости: py -m pip install pytesseract pillow opencv-python-headless")
     candidates=[shutil.which("tesseract"),r"C:\Program Files\Tesseract-OCR\tesseract.exe",r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]
     for p in candidates:
@@ -83,7 +86,7 @@ def configure_ocr():
     model_dirs.extend([os.path.join(os.path.dirname(pytesseract.pytesseract.tesseract_cmd),"tessdata")])
     for folder in model_dirs:
         if os.path.isdir(folder) and any(os.path.isfile(os.path.join(folder,n+".traineddata")) for n in ("eng","rus")):
-            TESSDATA_ARGS='--tessdata-dir '+folder
+            TESSDATA_ARGS=""
             break
     try:
         available=pytesseract.get_languages(config=TESSDATA_ARGS)
