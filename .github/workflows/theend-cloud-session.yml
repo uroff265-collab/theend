@@ -23,16 +23,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      ACCESS_EMAIL: ${{ inputs.access_email || 'uroff265@gmail.com' }}
-      THEEND_REMOTE_TOKEN: cloudflare-otp-protected
     steps:
       - uses: actions/checkout@v4
       - name: Install cloud emulator tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl python3
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
-          sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
+          sudo apt-get install -y python3 openssh-client
       - name: Enable Android KVM or configure safe software fallback
         run: |
           if [ -e /dev/kvm ]; then
