@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TheEnd Agent v12: accessibility-grounded guarded automation."""
+"""TheEnd Agent v19: visual resource detection and guarded automation."""
 import base64, csv, getpass, io, json, os, platform, re, shutil, subprocess, sys, tempfile, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 from theend_vision import parse_hierarchy, choose_action, analyze_screen
