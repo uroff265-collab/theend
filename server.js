@@ -117,10 +117,23 @@ const ACTIVITY_KEYS = [
   "black_ops","golden_eggs","town_shield","cheese_thief","survival_battle","scouting"
 ];
 
+// Only activities with an implemented agent path may be enabled.
+const IMPLEMENTED_ACTIVITY_KEYS = new Set([
+  "town_production","exploration_camp","sanctuary","alliance_help","golden_eggs"
+]);
+
+function sanitizeActivities(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return Object.fromEntries(ACTIVITY_KEYS.map(key => [
+    key, IMPLEMENTED_ACTIVITY_KEYS.has(key) && source[key] === true
+  ]));
+}
+
 app.get("/api/automation/settings", async (_req, res) => {
   try {
     const result = await pool.query("SELECT activities, updated_at AS \"updatedAt\" FROM automation_settings WHERE id=1");
-    res.json(result.rows[0] || {activities:{}, updatedAt:null});
+    const row = result.rows[0];
+    res.json({activities:sanitizeActivities(row?.activities), updatedAt:row?.updatedAt || null});
   } catch (error) {
     console.error("Could not load automation settings:", error.message);
     res.status(500).json({error:"Не удалось загрузить настройки автоматизации."});
@@ -137,7 +150,7 @@ app.put("/api/automation/settings", async (req, res) => {
     if (incoming[key] !== undefined && typeof incoming[key] !== "boolean") {
       return res.status(400).json({error:"Настройка " + key + " должна быть true или false."});
     }
-    activities[key] = incoming[key] === true;
+    activities[key] = IMPLEMENTED_ACTIVITY_KEYS.has(key) && incoming[key] === true;
   }
   try {
     const result = await pool.query(
@@ -154,7 +167,8 @@ app.put("/api/automation/settings", async (req, res) => {
 app.get("/api/agent/config", requireAgentToken, async (_req, res) => {
   try {
     const result = await pool.query("SELECT activities, updated_at AS \"updatedAt\" FROM automation_settings WHERE id=1");
-    res.json(result.rows[0] || {activities:{}, updatedAt:null});
+    const row = result.rows[0];
+    res.json({activities:sanitizeActivities(row?.activities), updatedAt:row?.updatedAt || null});
   } catch (error) {
     console.error("Could not load agent config:", error.message);
     res.status(500).json({error:"Не удалось загрузить конфигурацию агента."});
@@ -181,7 +195,7 @@ app.post("/api/agent/tasks", async (req, res) => {
     return res.status(400).json({error:"Напиши задачу длиной до 500 символов."});
   }
   try {
-    const active=await pool.query("SELECT id FROM agent_tasks WHERE status IN ('queued','running') LIMIT 1");
+    const active=await pool.query("SELECT id FROM agent_tasks WHERE status='queued' OR (status='running' AND started_at > NOW() - INTERVAL '10 minutes') LIMIT 1");
     if(active.rowCount) return res.status(409).json({error:"Сначала дождись завершения текущей задачи."});
     const result=await pool.query(
       "INSERT INTO agent_tasks (instruction) VALUES ($1) RETURNING id, instruction, status, created_at AS \"createdAt\"",
@@ -198,10 +212,12 @@ app.get("/api/agent/tasks/next", requireAgentToken, async (_req, res) => {
   try {
     const result=await pool.query(`
       WITH next_task AS (
-        SELECT id FROM agent_tasks WHERE status='queued'
-        ORDER BY id ASC LIMIT 1 FOR UPDATE SKIP LOCKED
+        SELECT id FROM agent_tasks
+        WHERE status='queued' OR (status='running' AND started_at < NOW() - INTERVAL '10 minutes')
+        ORDER BY CASE WHEN status='queued' THEN 0 ELSE 1 END, id ASC
+        LIMIT 1 FOR UPDATE SKIP LOCKED
       )
-      UPDATE agent_tasks AS task SET status='running', started_at=NOW()
+      UPDATE agent_tasks AS task SET status='running', started_at=NOW(), result=''
       FROM next_task WHERE task.id=next_task.id
       RETURNING task.id, task.instruction
     `);
@@ -271,7 +287,7 @@ app.post("/api/agent/collect-resources", async (_req, res) => {
       await client.query("ROLLBACK");
       return res.status(409).json({error:"Android-агент или эмулятор не подключён."});
     }
-    const active = await client.query("SELECT id FROM agent_tasks WHERE status IN ('queued','running') LIMIT 1");
+    const active = await client.query("SELECT id FROM agent_tasks WHERE status='queued' OR (status='running' AND started_at > NOW() - INTERVAL '10 minutes') LIMIT 1");
     if (active.rowCount) {
       await client.query("ROLLBACK");
       return res.status(409).json({error:"У агента уже выполняется другая задача.",taskId:String(active.rows[0].id)});
