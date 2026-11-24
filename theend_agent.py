@@ -566,7 +566,7 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit("ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v13 запущен | build 2026-11-23-safe-task-dispatch")
+    print("TheEnd Agent v14 запущен | build 2026-11-24-direct-tesseract-cli")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
     print("Безопасный режим: только контекстные кнопки Android UI; слепые координаты и OCR-сбор отключены.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
