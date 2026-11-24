@@ -759,6 +759,9 @@ def execute_task(instruction, activities):
                 pending.append("Диагностика экрана: "+str(e)[:300])
             continue
         if key=="offline_production":
+            if activities.get("town_production") is not True:
+                pending.append("Сбор ресурсов: сначала включи модуль «Производство города» в настройках.")
+                continue
             outcome=run_visual_resource_collection()
             if outcome.get("visually_confirmed",0)>0:
                 completed.append("Сбор ресурсов: визуально исчезло значков "+str(outcome["visually_confirmed"])+
@@ -773,6 +776,9 @@ def execute_task(instruction, activities):
             continue
         if key not in SEMANTIC_MODULES:
             pending.append(key+": модуль ещё не реализован.")
+            continue
+        if activities.get(key) is not True:
+            pending.append(key+": модуль выключен в настройках автоматизации.")
             continue
         outcome=run_semantic_modules({key:True})
         item=next((x for x in outcome if x[0]==key),None)
