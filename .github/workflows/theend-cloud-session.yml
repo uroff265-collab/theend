@@ -46,6 +46,7 @@ jobs:
         with:
           api-level: 30
           # Include Google Play so the official Last Asylum listing can be opened.
+          # localhost.run may return hosts such as <id>.app.lhr.life; the API accepts that form.
           target: google_apis_playstore
           arch: x86_64
           profile: pixel_2
