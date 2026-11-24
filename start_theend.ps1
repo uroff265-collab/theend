@@ -1,5 +1,7 @@
 # TheEnd one-click launcher for Windows / LDPlayer
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
+try { chcp 65001 | Out-Null; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $OutputEncoding = [Console]::OutputEncoding } catch {}
 $Build = "bcfc73deea286f6d0cb6807d7ad6a8d5c239d8e2"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/$Build"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -43,6 +45,11 @@ foreach ($RequiredFile in @($Agent, $Vision)) {
     throw "Required file is missing or incomplete: $RequiredFile. Check internet and run START_THEEND.bat again."
   }
 }
+$AgentText = Get-Content -Raw -Encoding UTF8 $Agent
+if ($AgentText -notmatch "TheEnd Agent v19" -or $AgentText -notmatch "Диагностика пшеницы: кадр") {
+  throw "Downloaded agent is not the expected V19 diagnostics build. Refusing to start an outdated or incomplete file."
+}
+Write-Host "Verified agent build: V19 wheat diagnostics" -ForegroundColor Green
 Write-Host "Agent files:"
 Get-Item $Agent, $Vision | Select-Object Name, Length | Format-Table -AutoSize
 & py -3 -c "import os,sys; sys.path.insert(0, r'$Folder'); import theend_vision; print('Vision module loaded:', os.path.basename(theend_vision.__file__))"
