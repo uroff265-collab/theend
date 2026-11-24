@@ -1,5 +1,6 @@
 const express = require("express");
 const { Pool } = require("pg");
+const { createPublicKey, verify: verifySignature } = require("node:crypto");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 10000;
@@ -341,6 +342,68 @@ app.post("/api/agent/commands/:id/result", requireAgentToken, async (req, res) =
   } catch (error) {
     console.error("Could not save agent command result:", error.message);
     res.status(500).json({ error:"Не удалось сохранить результат команды." });
+  }
+});
+
+
+let githubOidcJwks = null;
+let githubOidcJwksFetchedAt = 0;
+
+async function verifyGithubActionsToken(token) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) throw new Error("Malformed OIDC token");
+  const [encodedHeader, encodedPayload, encodedSignature] = parts;
+  const header = JSON.parse(Buffer.from(encodedHeader, "base64url").toString("utf8"));
+  const claims = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+  const now = Math.floor(Date.now() / 1000);
+
+  if (header.alg !== "RS256" || typeof header.kid !== "string") throw new Error("Unsupported OIDC signing key");
+  if (claims.iss !== "https://token.actions.githubusercontent.com") throw new Error("Unexpected OIDC issuer");
+  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!audiences.includes("theend-cloud-session")) throw new Error("Unexpected OIDC audience");
+  if (!Number.isFinite(claims.exp) || claims.exp < now - 30 || (claims.nbf && claims.nbf > now + 30)) {
+    throw new Error("Expired or not-yet-valid OIDC token");
+  }
+  if (claims.repository !== "uroff265-collab/theend" ||
+      claims.ref !== "refs/heads/main" ||
+      claims.workflow_ref !== "uroff265-collab/theend/.github/workflows/theend-cloud-session.yml@refs/heads/main") {
+    throw new Error("OIDC token is not from the trusted TheEnd workflow");
+  }
+
+  if (!githubOidcJwks || Date.now() - githubOidcJwksFetchedAt > 3600000) {
+    const response = await fetch("https://token.actions.githubusercontent.com/.well-known/jwks");
+    if (!response.ok) throw new Error("Could not retrieve GitHub OIDC signing keys");
+    githubOidcJwks = await response.json();
+    githubOidcJwksFetchedAt = Date.now();
+  }
+  const jwk = githubOidcJwks.keys.find(key => key.kid === header.kid);
+  if (!jwk) throw new Error("Unknown GitHub OIDC signing key");
+  const publicKey = createPublicKey({ key:jwk, format:"jwk" });
+  const signed = Buffer.from(encodedHeader + "." + encodedPayload);
+  const signature = Buffer.from(encodedSignature, "base64url");
+  if (!verifySignature("RSA-SHA256", signed, publicKey, signature)) throw new Error("Invalid OIDC signature");
+  return claims;
+}
+
+app.post("/internal/cloud-session", async (req, res) => {
+  try {
+    const authorization = req.get("authorization") || "";
+    if (!authorization.startsWith("Bearer ")) return res.status(401).json({error:"GitHub Actions identity required."});
+    const claims = await verifyGithubActionsToken(authorization.slice(7));
+    const { url, token, runId, commitSha } = req.body || {};
+    if (typeof url !== "string" || !/^https:\/\/[A-Za-z0-9-]+\.lhr\.life$/.test(url) ||
+        typeof token !== "string" || !/^[A-Za-z0-9_-]{32,128}$/.test(token) ||
+        !/^\d+$/.test(String(runId || "")) ||
+        typeof commitSha !== "string" || !/^[a-f0-9]{40}$/.test(commitSha)) {
+      return res.status(400).json({error:"Invalid cloud session metadata."});
+    }
+    console.log("THEEND_CLOUD_SESSION_PUBLISHED " + JSON.stringify({
+      url, token, runId:String(runId), commitSha, issuedAt:new Date().toISOString()
+    }));
+    res.status(202).json({ok:true});
+  } catch (error) {
+    console.error("Cloud session publication rejected:", error.message);
+    res.status(401).json({error:"GitHub Actions identity was rejected."});
   }
 });
 

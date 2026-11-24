@@ -54,8 +54,11 @@ adb exec-out screencap -p > /tmp/theend-cloud-screen.png
 test -s /tmp/theend-cloud-screen.png
 echo "ANDROID_EMULATOR_READY Android $ANDROID_VERSION"
 
+set +x
 THEEND_REMOTE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export THEEND_REMOTE_TOKEN
+echo "::add-mask::$THEEND_REMOTE_TOKEN"
+set -x
 python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
 REMOTE_PID=$!
 sleep 2
@@ -74,11 +77,34 @@ for i in $(seq 1 90); do
 done
 if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "Public SSH tunnel URL was not created"; exit 1; fi
 
+export URL
+set +x
+if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+  echo "GITHUB_OIDC_UNAVAILABLE: id-token: write permission is required"
+  exit 1
+fi
+OIDC_REQUEST_URL="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=theend-cloud-session"
+OIDC_RESPONSE="$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$OIDC_REQUEST_URL")"
+OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
+SESSION_PAYLOAD="$(python3 -c 'import json,os; print(json.dumps({"url":os.environ["URL"],"token":os.environ["THEEND_REMOTE_TOKEN"],"runId":os.environ["GITHUB_RUN_ID"],"commitSha":os.environ["GITHUB_SHA"]}))')"
+PUBLISHED=0
+for i in $(seq 1 18); do
+  STATUS="$(curl -sS -o /tmp/theend-publish-response.json -w '%{http_code}' -X POST "https://theend-1.onrender.com/internal/cloud-session" -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "$SESSION_PAYLOAD" || true)"
+  if [ "$STATUS" = "202" ]; then PUBLISHED=1; break; fi
+  echo "Private session registry not ready (HTTP $STATUS; attempt $i/18)"
+  sleep 10
+done
+if [ "$PUBLISHED" -ne 1 ]; then
+  cat /tmp/theend-publish-response.json 2>/dev/null || true
+  echo "CLOUD_SESSION_REGISTRY_FAILED"
+  exit 1
+fi
+set -x
 echo ""
 echo "=============================================="
 echo "THEEND CLOUD ANDROID IS READY"
-echo "OPEN THIS LINK: $URL/?k=$THEEND_REMOTE_TOKEN"
-echo "The page requires the private access key in the link."
+echo "OPEN THIS BASE URL: $URL"
+echo "The private access key was delivered to the authenticated TheEnd service log."
 echo "Keep this workflow running while using the emulator."
 echo "=============================================="
 echo ""

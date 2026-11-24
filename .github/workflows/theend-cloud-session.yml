@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: theend-cloud-android-session
@@ -20,7 +21,7 @@ jobs:
       - name: Install cloud emulator tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 openssh-client
+          sudo apt-get install -y curl python3 openssh-client
       - name: Enable Android KVM or configure safe software fallback
         run: |
           if [ -e /dev/kvm ]; then
@@ -38,7 +39,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          # Match the google_apis image that passed the cloud ADB/screenshot job.
+          # Include Google Play so the official Last Asylum listing can be opened.
           target: google_apis_playstore
           arch: x86_64
           profile: pixel_2
