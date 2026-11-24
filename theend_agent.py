@@ -63,6 +63,11 @@ TESSDATA_ARGS=""
 
 def configure_ocr():
     global TESSDATA_ARGS
+    # Pin the model directory in this process so every pytesseract call uses it.
+    local=os.environ.get("LOCALAPPDATA","") if os.name=="nt" else ""
+    preferred=os.path.join(local,"TheEnd","tessdata") if local else ""
+    if preferred and os.path.isdir(preferred):
+        os.environ["TESSDATA_PREFIX"]=preferred
     if not OCR: raise SystemExit("Установи зависимости: py -m pip install pytesseract pillow opencv-python-headless")
     candidates=[shutil.which("tesseract"),r"C:\Program Files\Tesseract-OCR\tesseract.exe",r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]
     for p in candidates:
