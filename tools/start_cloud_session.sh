@@ -69,14 +69,14 @@ python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
 REMOTE_PID=$!
 sleep 2
 kill -0 "$REMOTE_PID"
-# Use localhost.run SSH reverse forwarding instead of Cloudflare Quick Tunnel,
-# which currently rejects account-less tunnel creation with HTTP 429.
+# Pinggy's free HTTPS tunnel has a documented 60-minute session and unlimited transfer,
+# unlike localhost.run's anonymous bandwidth throttling. Empty password is accepted.
 ssh -V
-ssh -T -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:8765 nokey@localhost.run >/tmp/theend-tunnel.log 2>&1 &
+sshpass -p '' ssh -T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o NumberOfPasswordPrompts=1 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R0:127.0.0.1:8765 free.pinggy.io >/tmp/theend-tunnel.log 2>&1 &
 TUNNEL_PID=$!
 URL=""
 for i in $(seq 1 90); do
-  URL="$(grep -Eo 'https://[a-zA-z0-9.-]+\.lhr\.life' /tmp/theend-tunnel.log | head -n1 || true)"
+  URL="$(grep -Eo 'https://[A-Za-z0-9.-]+\.pinggy\.link' /tmp/theend-tunnel.log | head -n1 || true)"
   if [ -n "$URL" ]; then break; fi
   if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then cat /tmp/theend-tunnel.log; exit 1; fi
   sleep 2
@@ -84,18 +84,9 @@ done
 if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "Public SSH tunnel URL was not created"; exit 1; fi
 echo "CHECKPOINT_TUNNEL_CREATED $URL"
 
-# Verify the public URL reaches the live Android screenshot endpoint before registration.
-FRAME_OK=0
-for i in $(seq 1 30); do
-  if curl -fsS --max-time 15 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png &&
-     head -c 8 /tmp/theend-public-frame.png | od -An -tx1 | grep -qi '89 50 4e 47 0d 0a 1a 0a'; then
-    FRAME_OK=1
-    break
-  fi
-  echo "Public Android frame not ready (attempt $i/30)"
-  sleep 2
-done
-if [ "$FRAME_OK" -ne 1 ]; then
+# Verify the public URL once. Repeated probes trigger throttling on free tunnel services.
+if ! curl -fsS --max-time 45 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png ||
+   ! head -c 8 /tmp/theend-public-frame.png | od -An -tx1 | grep -qi '89 50 4e 47 0d 0a 1a 0a'; then
   echo "PUBLIC_ANDROID_FRAME_CHECK_FAILED"
   cat /tmp/theend-tunnel.log
   exit 1
