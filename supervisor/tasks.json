@@ -1,0 +1,27 @@
+{
+  "tasks": [
+    {
+      "id": "cloud-session",
+      "title": "Publish a usable cloud Android session",
+      "status": "in_progress",
+      "acceptance_criteria": [
+        "A browser session URL is published",
+        "A startup screenshot is attached as a workflow artifact",
+        "The session is reachable and displays Android"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "gameplay-agent",
+      "title": "Launch Last Asylum and verify autonomous resource collection",
+      "status": "blocked",
+      "acceptance_criteria": [
+        "Game is launched in the session",
+        "Agent detects a resource target",
+        "Agent performs a collection action",
+        "A before-and-after observation confirms collection"
+      ],
+      "evidence": []
+    }
+  ]
+}

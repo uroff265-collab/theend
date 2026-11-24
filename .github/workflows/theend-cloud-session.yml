@@ -2,7 +2,7 @@ name: TheEnd cloud game session
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/theend-supervisor-mvp]
     paths:
       - '.github/workflows/theend-cloud-session.yml'
       - 'tools/cloud_android_remote.py'

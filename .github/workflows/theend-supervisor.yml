@@ -1,0 +1,74 @@
+name: TheEnd Supervisor audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_ai:
+        description: "Run the optional paid AI review (requires API credits)"
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches: [main, feature/theend-supervisor-mvp]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: theend-supervisor-audit
+  cancel-in-progress: false
+
+jobs:
+  static:
+    name: Free offline security and task audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run free static audit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python supervisor/static_audit.py
+      - name: Audit task completion claims against proof
+        run: python tools/theend_supervisor.py
+      - name: Upload task audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theend-supervisor-task-report
+          path: supervisor/latest-audit.json
+          retention-days: 14
+
+  ai:
+    name: Optional paid AI review
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ai == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run AI Supervisor
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          THEEND_SUPERVISOR_MODEL: gpt-6.2-sol
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python supervisor/audit.py
