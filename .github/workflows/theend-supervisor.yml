@@ -3,7 +3,7 @@ name: TheEnd Supervisor audit
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/theend-supervisor-mvp]
   schedule:
     - cron: "17 * * * *"
 
