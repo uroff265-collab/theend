@@ -39,7 +39,17 @@ if [ ! -x "$EMULATOR" ]; then
   echo "ANDROID_EMULATOR_BINARY_MISSING path=$EMULATOR"
   exit 1
 fi
-echo no | "$AVDMANAGER" create avd --force -n theend-api30 --package "$IMAGE" --device pixel_2
+AVD_HOME="$HOME/.android/avd"
+export ANDROID_AVD_HOME="$AVD_HOME"
+mkdir -p "$AVD_HOME"
+rm -rf "$AVD_HOME/theend-api30.avd" "$AVD_HOME/theend-api30.ini"
+echo no | "$AVDMANAGER" create avd --force -n theend-api30 --package "$IMAGE" --device pixel_2 --path "$AVD_HOME/theend-api30.avd"
+"$AVDMANAGER" list avd
+if [ ! -f "$AVD_HOME/theend-api30.ini" ] || [ ! -f "$AVD_HOME/theend-api30.avd/config.ini" ]; then
+  echo "ANDROID_AVD_CREATE_FAILED home=$AVD_HOME"
+  find "$HOME/.android" -maxdepth 4 -type f -name '*.ini' -print || true
+  exit 1
+fi
 
 if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
   ACCEL_ARGS=(-accel on)
