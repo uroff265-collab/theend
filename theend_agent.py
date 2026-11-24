@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """TheEnd Agent v12: accessibility-grounded guarded automation."""
-import getpass, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
+import csv, getpass, io, json, os, platform, re, shutil, subprocess, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 from theend_vision import parse_hierarchy, choose_action, analyze_screen
 
@@ -63,47 +63,39 @@ TESSDATA_ARGS=""
 
 def configure_ocr():
     global TESSDATA_ARGS
-    # Pin the model directory in this process so every pytesseract call uses it.
+    if not OCR: raise SystemExit("Установи зависимости: py -m pip install pillow opencv-python-headless numpy")
     local=os.environ.get("LOCALAPPDATA","") if os.name=="nt" else ""
-    preferred=os.path.join(local,"TheEnd","tessdata") if local else ""
-    # Tesseract's Windows build reliably reads models through TESSDATA_PREFIX.
-    # Keep the value as a plain directory path (never include quote characters).
-    if preferred and os.path.isdir(preferred):
-        os.environ["TESSDATA_PREFIX"]=preferred
-    else:
-        os.environ.pop("TESSDATA_PREFIX", None)
-    if not OCR: raise SystemExit("Установи зависимости: py -m pip install pytesseract pillow opencv-python-headless")
+    folder=os.path.join(local,"TheEnd","tessdata") if local else ""
+    if not folder or not os.path.isdir(folder):
+        folder=os.path.join(os.path.dirname(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),"tessdata")
+    if folder and os.path.isdir(folder):
+        os.environ["TESSDATA_PREFIX"]=folder
     candidates=[shutil.which("tesseract"),r"C:\Program Files\Tesseract-OCR\tesseract.exe",r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]
-    for p in candidates:
-        if p and (os.path.isfile(p) if os.path.isabs(p) else True):
-            pytesseract.pytesseract.tesseract_cmd=p
-            break
-    # Prefer the user's writable model folder; Program Files is often read-only.
-    model_dirs=[]
-    if os.name=="nt":
-        local=os.environ.get("LOCALAPPDATA","")
-        if local: model_dirs.append(os.path.join(local,"TheEnd","tessdata"))
-    model_dirs.extend([os.path.join(os.path.dirname(pytesseract.pytesseract.tesseract_cmd),"tessdata")])
-    for folder in model_dirs:
-        if os.path.isdir(folder) and any(os.path.isfile(os.path.join(folder,n+".traineddata")) for n in ("eng","rus")):
-            TESSDATA_ARGS=""
-            break
+    exe=next((p for p in candidates if p and (os.path.isfile(p) if os.path.isabs(p) else True)),None)
+    if not exe: raise SystemExit("Tesseract OCR не найден.")
+    pytesseract.pytesseract.tesseract_cmd=exe
+    # Use Tesseract's CLI directly. This avoids pytesseract's Windows argument quoting
+    # and language-list parsing issues when the user profile path contains spaces.
+    env=os.environ.copy()
     try:
-        available=pytesseract.get_languages(config=TESSDATA_ARGS)
-        preferred=[x for x in ("eng","rus") if x in available]
-        if preferred:
-            # Run an actual OCR call during startup; get_languages alone is not enough.
-            from PIL import Image, ImageDraw
-            probe=Image.new("RGB",(480,100),"white")
-            ImageDraw.Draw(probe).text((12,25),"THEEND OCR TEST 123",fill="black")
-            test=pytesseract.image_to_string(probe,lang="eng",config=(TESSDATA_ARGS+" --oem 3 --psm 7").strip())
-            if not test.strip():
-                raise RuntimeError("Tesseract нашёл модели, но тестовое распознавание вернуло пустой текст.")
-            print("OCR: языки", "+".join(preferred), "| модели:", TESSDATA_ARGS or "системная папка", "| тест:", repr(test.strip()))
-        else:
-            print("OCR: языковые модели eng/rus не найдены; доступно:", ", ".join(available))
+        result=subprocess.run([exe,"--list-langs"],capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=15,env=env)
+        output=(result.stdout or "")+"\n"+(result.stderr or "")
+        available=[x.strip() for x in output.splitlines() if x.strip() in ("eng","rus")]
+        if result.returncode!=0 or not available:
+            raise RuntimeError(output.strip() or "Tesseract не вернул список языков.")
+        from PIL import ImageDraw
+        probe=Image.new("RGB",(480,100),"white")
+        ImageDraw.Draw(probe).text((12,25),"THEEND OCR TEST 123",fill="black")
+        buf=io.BytesIO(); probe.save(buf,format="PNG")
+        test=subprocess.run([exe,"stdin","stdout","-l","eng","--oem","3","--psm","7"],
+            input=buf.getvalue(),capture_output=True,timeout=20,env=env)
+        test_text=test.stdout.decode("utf-8","replace").strip()
+        if test.returncode!=0 or not test_text:
+            err=test.stderr.decode("utf-8","replace")
+            raise RuntimeError("Тест OCR не пройден: "+(err or test_text or "пустой результат"))
+        print("OCR: языки", "+".join(available), "| Tesseract CLI | тест:", repr(test_text))
     except Exception as e:
-        print("OCR: не удалось проверить модели:",e)
+        raise SystemExit("Ошибка настройки OCR: "+str(e))
 
 def screen_png():
     # Screen pixels are read into memory only; no screenshot files or uploads are created.
@@ -137,46 +129,36 @@ def recognize(png):
     im=im.resize((int(im.width*scale),int(im.height*scale)))
     im=ImageOps.grayscale(im)
     im=ImageEnhance.Contrast(im).enhance(1.8).filter(ImageFilter.SHARPEN)
-    langs=[]
-    try:
-        available=pytesseract.get_languages(config=TESSDATA_ARGS)
-        if "eng" in available and "rus" in available: langs.append("eng+rus")
-        if "eng" in available: langs.append("eng")
-        if "rus" in available: langs.append("rus")
-    except Exception: langs=["eng"]
-    if not langs: langs=["eng"]
-    best=[]
-    errors=[]
-    for lang in langs:
-        for psm in (11,6,12):
-            try:
-                d=pytesseract.image_to_data(im,lang=lang,config=(TESSDATA_ARGS+f" --oem 3 --psm {psm}").strip(),output_type=pytesseract.Output.DICT)
-                words=[]
-                for i,t in enumerate(d.get("text",[])):
-                    t=re.sub(r"\s+"," ",t).strip()
-                    try:
-                        conf=float(d["conf"][i]); x=int(d["left"][i]); y=int(d["top"][i]); w=int(d["width"][i]); h=int(d["height"][i])
-                    except (ValueError,TypeError,KeyError): continue
-                    if t and conf>=25 and w>0 and h>0:
-                        words.append({"text":t,"x":round((x+w/2)/scale),"y":round((y+h/2)/scale),"w":round(w/scale),"h":round(h/scale),"conf":conf})
-                if sum(z["conf"] for z in words)>sum(z["conf"] for z in best): best=words
-            except pytesseract.pytesseract.TesseractNotFoundError:
-                raise RuntimeError("Tesseract OCR не найден. Установи его и перезапусти PowerShell.")
-            except Exception as e:
-                errors.append(f"{lang}/psm{psm}: {type(e).__name__}: {e}")
-    if not best and not getattr(recognize,"_reported",False):
+    buf=io.BytesIO(); im.save(buf,format="PNG")
+    env=os.environ.copy()
+    langs="eng+rus"
+    best=[]; errors=[]
+    for psm in (11,6,12):
         try:
-            raw_text=pytesseract.image_to_string(im,lang=langs[0],
-                config=(TESSDATA_ARGS+" --oem 3 --psm 3").strip())
+            result=subprocess.run([pytesseract.pytesseract.tesseract_cmd,"stdin","stdout","-l",langs,
+                "--oem","3","--psm",str(psm),"tsv"],input=buf.getvalue(),
+                capture_output=True,timeout=30,env=env)
+            if result.returncode!=0:
+                raise RuntimeError(result.stderr.decode("utf-8","replace"))
+            rows=csv.DictReader(io.StringIO(result.stdout.decode("utf-8","replace")),delimiter="\\t")
+            words=[]
+            for row in rows:
+                t=re.sub(r"\\s+"," ",(row.get("text") or "")).strip()
+                try:
+                    conf=float(row.get("conf","-1")); x=int(row["left"]); y=int(row["top"]); w=int(row["width"]); h=int(row["height"])
+                except (ValueError,TypeError,KeyError): continue
+                if t and conf>=25 and w>0 and h>0:
+                    words.append({"text":t,"x":round((x+w/2)/scale),"y":round((y+h/2)/scale),
+                        "w":round(w/scale),"h":round(h/scale),"conf":conf})
+            if sum(z["conf"] for z in words)>sum(z["conf"] for z in best): best=words
         except Exception as e:
-            raw_text=""
-            errors.append("image_to_string: "+type(e).__name__+": "+str(e))
+            errors.append(f"psm{psm}: {type(e).__name__}: {e}")
+    if not best and not getattr(recognize,"_reported",False):
         gray_array=np.asarray(im) if np is not None else None
         pixel_info=("size="+str(im.size))
         if gray_array is not None:
             pixel_info += " gray_min="+str(int(gray_array.min()))+" gray_max="+str(int(gray_array.max()))+" gray_std="+str(round(float(gray_array.std()),1))
-        print(time.strftime("%H:%M:%S"),"OCR пустой результат;",pixel_info,
-              "| text:",repr(raw_text[:500]),"| errors:", " | ".join(errors[:3]) or "none")
+        print(time.strftime("%H:%M:%S"),"OCR пустой результат;",pixel_info,"| errors:", " | ".join(errors[:3]) or "none")
         recognize._reported=True
     elif best and not getattr(recognize,"_reported",False):
         print(time.strftime("%H:%M:%S"),"OCR проверка: распознано слов:",len(best),
