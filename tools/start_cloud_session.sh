@@ -55,6 +55,7 @@ sleep 5
 adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n1 || true
 adb exec-out screencap -p > /tmp/theend-cloud-screen.png
 test -s /tmp/theend-cloud-screen.png
+echo "CHECKPOINT_ANDROID_BOOTED Android $ANDROID_VERSION"
 echo "ANDROID_EMULATOR_READY Android $ANDROID_VERSION"
 
 set +x
@@ -69,7 +70,7 @@ kill -0 "$REMOTE_PID"
 # Use localhost.run SSH reverse forwarding instead of Cloudflare Quick Tunnel,
 # which currently rejects account-less tunnel creation with HTTP 429.
 ssh -V
-ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:8765 nokey@localhost.run >/tmp/theend-tunnel.log 2>&1 &
+ssh -N -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:8765 nokey@localhost.run >/tmp/theend-tunnel.log 2>&1 &
 TUNNEL_PID=$!
 URL=""
 for i in $(seq 1 90); do
@@ -79,6 +80,25 @@ for i in $(seq 1 90); do
   sleep 2
 done
 if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "Public SSH tunnel URL was not created"; exit 1; fi
+echo "CHECKPOINT_TUNNEL_CREATED $URL"
+
+# Verify the public URL reaches the live Android screenshot endpoint before registration.
+FRAME_OK=0
+for i in $(seq 1 30); do
+  if curl -fsS --max-time 15 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png &&
+     head -c 8 /tmp/theend-public-frame.png | od -An -tx1 | grep -qi '89 50 4e 47 0d 0a 1a 0a'; then
+    FRAME_OK=1
+    break
+  fi
+  echo "Public Android frame not ready (attempt $i/30)"
+  sleep 2
+done
+if [ "$FRAME_OK" -ne 1 ]; then
+  echo "PUBLIC_ANDROID_FRAME_CHECK_FAILED"
+  cat /tmp/theend-tunnel.log
+  exit 1
+fi
+echo "CHECKPOINT_PUBLIC_FRAME_OK bytes=$(wc -c </tmp/theend-public-frame.png)"
 
 export URL
 set +x
@@ -102,6 +122,7 @@ if [ "$PUBLISHED" -ne 1 ]; then
   echo "CLOUD_SESSION_REGISTRY_FAILED"
   exit 1
 fi
+echo "CHECKPOINT_SESSION_REGISTERED run=$GITHUB_RUN_ID"
 set -x
 echo ""
 echo "=============================================="
@@ -113,6 +134,7 @@ echo "=============================================="
 echo ""
 
 for i in $(seq 1 1800); do
+  if (( i % 30 == 0 )); then echo "CHECKPOINT_SESSION_HEARTBEAT elapsed=${i}s"; fi
   if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then echo "Public tunnel stopped"; cat /tmp/theend-tunnel.log; exit 1; fi
   if ! kill -0 "$REMOTE_PID" 2>/dev/null; then echo "Remote Android server stopped"; cat /tmp/theend-remote.log; exit 1; fi
   sleep 1
