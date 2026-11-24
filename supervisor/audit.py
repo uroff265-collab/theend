@@ -20,14 +20,14 @@ MAX_TOTAL_CHARS = 110000
 PATTERNS = [
     (re.compile(r"(?is)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
      "[REDACTED_PRIVATE_KEY_BLOCK]"),
-    (re.compile(r"(?i)(authorization\\s*[:=]\\s*bearer\\s+)[A-Za-z0-9._~+/=-]+"), r"\\1[REDACTED]"),
-    (re.compile(r"(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|password|passwd)\\s*[:=]\\s*['\\\"]?)[^\\s'\\\"]{8,}"), r"\\1[REDACTED]"),
-    (re.compile(r"(?i)(postgres(?:ql)?://[^:\\s/]+:)[^@\\s]+(@)"), r"\\1[REDACTED]\\2"),
-    (re.compile(r"(?i)(https?://[^:/\\s]+:)[^@/\\s]+(@)"), r"\\1[REDACTED]\\2"),
-    (re.compile(r"\\bgh[pousr]_[A-Za-z0-9]{20,}\\b"), "[REDACTED_GITHUB_TOKEN]"),
-    (re.compile(r"\\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\\b"), "[REDACTED_OPENAI_KEY]"),
-    (re.compile(r"\\bAKIA[0-9A-Z]{16}\\b"), "[REDACTED_AWS_ACCESS_KEY]"),
-    (re.compile(r"\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b"), "[REDACTED_JWT]"),
+    (re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9._~+/=-]+"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|password|passwd)\s*[:=]\s*['\\"]?)[^\s'\\"]{8,}"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)(postgres(?:ql)?://[^:\s/]+:)[^@\s]+(@)"), r"\1[REDACTED]\2"),
+    (re.compile(r"(?i)(https?://[^:/\s]+:)[^@/\s]+(@)"), r"\1[REDACTED]\2"),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
+    (re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b"), "[REDACTED_OPENAI_KEY]"),
+    (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "[REDACTED_AWS_ACCESS_KEY]"),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"), "[REDACTED_JWT]"),
 ]
 
 def run(*args):
@@ -52,14 +52,14 @@ def collect():
         except (OSError, UnicodeError):
             continue
         if len(source) > MAX_FILE_CHARS:
-            source = source[:MAX_FILE_CHARS] + "\\n[TRUNCATED]"
-        section = f"\\n--- FILE: {name} ---\\n{redact(source)}\\n"
+            source = source[:MAX_FILE_CHARS] + "\n[TRUNCATED]"
+        section = f"\n--- FILE: {name} ---\n{redact(source)}\n"
         if total + len(section) > MAX_TOTAL_CHARS:
             print(f"Source limit reached; remaining files skipped after {name}.")
             break
         chunks.append(section)
         total += len(section)
-    return "\\n".join(chunks)
+    return "\n".join(chunks)
 
 def ask_model(context):
     key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -100,13 +100,13 @@ def ask_model(context):
         for part in item.get("content", []):
             if part.get("type") == "output_text":
                 texts.append(part.get("text", ""))
-    raw = "\\n".join(texts).strip()
+    raw = "\n".join(texts).strip()
     if not raw:
         raise RuntimeError("OpenAI API returned no output_text.")
     try:
         report = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r"\\{.*\\}", raw, re.S)
+        match = re.search(r"\{.*\}", raw, re.S)
         if not match:
             raise RuntimeError("Model response was not valid JSON.") from None
         try:
@@ -149,7 +149,7 @@ def publish(report):
     # Do not require repository labels to exist; that previously caused publication to fail.
     payload = json.dumps({
         "title": "[Supervisor] Security/reliability audit findings",
-        "body": "\\n".join(lines),
+        "body": "\n".join(lines),
     }).encode("utf-8")
     request = urllib.request.Request(
         f"https://api.github.com/repos/{repository}/issues",
