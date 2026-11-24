@@ -505,13 +505,16 @@ def learn_screen():
         words=recognize(png)
         im=Image.open(io.BytesIO(png))
         width,height=im.size
-        if not words and not getattr(learn_screen,"_diagnostic_saved",False):
+        if not getattr(learn_screen,"_diagnostic_saved",False):
             try:
-                desktop=os.path.join(os.path.expanduser("~"),"Desktop")
-                os.makedirs(desktop,exist_ok=True)
-                diagnostic=os.path.join(desktop,"TheEnd_screen_diagnostic.png")
+                # Save beside the running agent because Desktop can be redirected.
+                diagnostic=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "TheEnd_screen_diagnostic.png")
                 im.convert("RGB").save(diagnostic,optimize=True)
-                print(time.strftime("%H:%M:%S"),"Диагностический кадр сохранён:",diagnostic)
+                print(time.strftime("%H:%M:%S"),"Диагностический кадр сохранён рядом с ботом:",diagnostic)
+                if os.name=="nt":
+                    try: os.startfile(diagnostic)
+                    except OSError: pass
                 learn_screen._diagnostic_saved=True
             except Exception as e:
                 print("Не удалось сохранить диагностический кадр:",str(e)[:160])
