@@ -130,7 +130,7 @@ def publish_issue(report, has_findings):
         print("No new issue opened: no configured static-rule matches.")
         return
 
-    body = report + "\\n\\n---\\nCommit: " + os.environ.get("GITHUB_SHA", "unknown")
+    body = report + "\n\n---\nCommit: " + os.environ.get("GITHUB_SHA", "unknown")
     payload = json.dumps({"title": title, "body": body}).encode("utf-8")
     if existing:
         url = f"{api}/{existing['number']}"
