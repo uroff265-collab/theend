@@ -7,7 +7,7 @@ diagnostics() {
   echo "---- adb devices ----"; adb devices -l || true
   echo "---- emulator boot ----"; adb shell getprop sys.boot_completed || true
   echo "---- remote server log ----"; cat /tmp/theend-remote.log 2>/dev/null || true
-  echo "---- public tunnel log ----"; cat /tmp/theend-tunnel.log 2>/dev/null || true
+  echo "---- cloudflare tunnel log ----"; cat /tmp/theend-tunnel.log 2>/dev/null || true
 }
 trap diagnostics ERR
 set -x
@@ -69,25 +69,40 @@ python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
 REMOTE_PID=$!
 sleep 2
 kill -0 "$REMOTE_PID"
-# Pinggy's free HTTPS tunnel has a documented 60-minute session and unlimited transfer,
-# unlike localhost.run's anonymous bandwidth throttling. Empty password is accepted.
-ssh -V
-sshpass -p '' ssh -T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o NumberOfPasswordPrompts=1 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R0:127.0.0.1:8765 free.pinggy.io >/tmp/theend-tunnel.log 2>&1 &
+
+# Use Cloudflare's unauthenticated Quick Tunnel instead of the previous free SSH
+# tunnel provider, whose SSH handshake could stall the workflow indefinitely.
+curl -fsSL --retry 3 --retry-delay 2 \
+  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+  -o /tmp/cloudflared
+chmod +x /tmp/cloudflared
+/tmp/cloudflared --version
+/tmp/cloudflared tunnel --url http://127.0.0.1:8765 --no-autoupdate \
+  >/tmp/theend-tunnel.log 2>&1 &
 TUNNEL_PID=$!
+
 URL=""
-for i in $(seq 1 90); do
-  URL="$(grep -Eo 'https://[A-Za-z0-9.-]+(\.run\.pinggy-free\.link|\.free\.pinggy\.net|\.a\.pinggy\.link)' /tmp/theend-tunnel.log | head -n1 || true)"
+for i in $(seq 1 150); do
+  URL="$(grep -Eo 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' /tmp/theend-tunnel.log | head -n1 || true)"
   if [ -n "$URL" ]; then break; fi
   if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then cat /tmp/theend-tunnel.log; exit 1; fi
   sleep 2
 done
-if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "Public SSH tunnel URL was not created"; exit 1; fi
+if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "CLOUDFLARE_QUICK_TUNNEL_URL_NOT_CREATED"; exit 1; fi
 echo "CHECKPOINT_TUNNEL_CREATED $URL"
-printf '%s\\n' "$URL/?k=$THEEND_REMOTE_TOKEN" > /tmp/theend-cloud-session-link.txt
+printf '%s\n' "$URL/?k=$THEEND_REMOTE_TOKEN" > /tmp/theend-cloud-session-link.txt
 
-# Verify the public URL once. Repeated probes trigger throttling on free tunnel services.
-if ! curl -fsS --max-time 45 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png ||
-   ! head -c 8 /tmp/theend-public-frame.png | od -An -tx1 | grep -qi '89 50 4e 47 0d 0a 1a 0a'; then
+# Wait briefly for the new edge route to propagate; avoid repeated noisy probes.
+FRAME_OK=0
+for i in $(seq 1 6); do
+  if curl -fsS --max-time 25 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png &&
+     head -c 8 /tmp/theend-public-frame.png | od -An -tx1 | grep -qi '89 50 4e 47 0d 0a 1a 0a'; then
+    FRAME_OK=1
+    break
+  fi
+  sleep 10
+done
+if [ "$FRAME_OK" -ne 1 ]; then
   echo "PUBLIC_ANDROID_FRAME_CHECK_FAILED"
   cat /tmp/theend-tunnel.log
   exit 1
@@ -129,7 +144,7 @@ echo ""
 
 for i in $(seq 1 1800); do
   if (( i % 30 == 0 )); then echo "CHECKPOINT_SESSION_HEARTBEAT elapsed=${i}s"; fi
-  if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then echo "Public tunnel stopped"; cat /tmp/theend-tunnel.log; exit 1; fi
+  if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then echo "Cloudflare tunnel stopped"; cat /tmp/theend-tunnel.log; exit 1; fi
   if ! kill -0 "$REMOTE_PID" 2>/dev/null; then echo "Remote Android server stopped"; cat /tmp/theend-remote.log; exit 1; fi
   sleep 1
 done
