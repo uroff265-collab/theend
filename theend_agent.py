@@ -361,7 +361,7 @@ def find_visual_resource_badges(png):
         summary="; ".join(f'({z["x"]},{z["y"]})={z["confidence"]:.3f}@{z["scale"]}' for z in unique[:5])
         print(time.strftime("%H:%M:%S"),"Диагностика значка: поиск по игровому полю",
               f"{w}x{h}","| лучшие кандидаты:",summary or "совпадений нет",
-              "| порог действия 0.720 + подтверждение двумя кадрами")
+              "| порог действия 0.620 + подтверждение тремя кадрами")
         LAST_WHEAT_DIAG=now
     return unique
 
@@ -374,7 +374,7 @@ def run_visual_resource_collection():
     try:
         candidates=find_visual_resource_badges(screen_png())
         # Keep weak matches for diagnostics, but never act on them.
-        eligible=[z for z in candidates if z["confidence"]>=0.72]
+        eligible=[z for z in candidates if z["confidence"]>=0.62]
         if not eligible:
             PENDING_WHEAT_TARGET=None
             WHEAT_CONFIRMATIONS=0
@@ -386,14 +386,14 @@ def run_visual_resource_collection():
         else:
             PENDING_WHEAT_TARGET=target
             WHEAT_CONFIRMATIONS=1
-        if WHEAT_CONFIRMATIONS<2:
-            print(time.strftime("%H:%M:%S"),"Кандидат пшеницы пока не нажимаю: жду подтверждение следующего кадра.",
+        if WHEAT_CONFIRMATIONS<3:
+            print(time.strftime("%H:%M:%S"),"Кандидат значка ресурса пока не нажимаю: жду три совпадения подряд.",
                   f'позиция=({target["x"]},{target["y"]}) score={target["confidence"]}')
             return
         now=time.time()
         key=f'{round(target["x"]/w*100)}:{round(target["y"]/h*100)}'
         if now-LAST_VISUAL_TAPS.get(key,0)<120: return
-        print(time.strftime("%H:%M:%S"),"Подтверждённый значок пшеницы:",
+        print(time.strftime("%H:%M:%S"),"Подтверждённый значок ресурса:",
               f'({target["x"]},{target["y"]})',"совпадение",target["confidence"],
               "| подтверждений:",WHEAT_CONFIRMATIONS)
         tap(target["x"],target["y"])
@@ -403,7 +403,7 @@ def run_visual_resource_collection():
         time.sleep(1.2)
         after=find_visual_resource_badges(screen_png())
         still=any(abs(z["x"]-target["x"])<w*.04 and abs(z["y"]-target["y"])<h*.04
-                  and z["confidence"]>=0.72 for z in after)
+                  and z["confidence"]>=0.62 for z in after)
         print(time.strftime("%H:%M:%S"),
               "Значок остался после нажатия; повтор заблокирован на 120 секунд." if still
               else "Значок исчез после нажатия; визуальный сбор подтверждён.")
@@ -789,7 +789,7 @@ def main():
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit(r"ADB не найден: проверь C:\platform-tools\adb.exe")
     print("TheEnd Agent v19 запущен | build 2026-11-24-wheat-diagnostics")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
-    print("Режим: визуальное распознавание значков сбора пшеницы по шаблону; OCR не используется для поиска этих значков.")
+    print("Режим: поиск игровых значков ресурсов по изображению; OCR не используется для поиска значков.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
         now=time.time(); online=connected()
