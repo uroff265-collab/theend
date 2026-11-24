@@ -2,10 +2,6 @@ name: TheEnd Supervisor audit
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, feature/theend-supervisor-mvp]
-  schedule:
-    - cron: "17 * * * *"
 
 permissions:
   contents: read
@@ -30,7 +26,7 @@ jobs:
       - name: Run Supervisor
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          THEEND_SUPERVISOR_MODEL: ${{ vars.THEEND_SUPERVISOR_MODEL }}
+          THEEND_SUPERVISOR_MODEL: gpt-6.2-sol
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SHA: ${{ github.sha }}
