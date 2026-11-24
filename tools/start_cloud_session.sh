@@ -76,7 +76,7 @@ sshpass -p '' ssh -T -p 443 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/d
 TUNNEL_PID=$!
 URL=""
 for i in $(seq 1 90); do
-  URL="$(grep -Eo 'https://[A-Za-z0-9.-]+\.pinggy\.link' /tmp/theend-tunnel.log | head -n1 || true)"
+  URL="$(grep -Eo 'https://[A-Za-z0-9.-]+(\.run\.pinggy-free\.link|\.free\.pinggy\.net|\.a\.pinggy\.link)' /tmp/theend-tunnel.log | head -n1 || true)"
   if [ -n "$URL" ]; then break; fi
   if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then cat /tmp/theend-tunnel.log; exit 1; fi
   sleep 2
