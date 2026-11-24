@@ -15,7 +15,11 @@ try {
   $Headers = @{ "User-Agent" = "TheEnd-Updater"; "Accept" = "application/vnd.github+json" }
   $CommitInfo = Invoke-RestMethod -Headers $Headers -Uri "https://api.github.com/repos/$RepoOwner/$RepoName/commits/$Branch"
   $Build = [string]$CommitInfo.sha
-  if ($Build -notmatch '^[0-9a-f]{40}
+  if ($Build.Length -ne 40 -or $Build -match '[^0-9a-f]') { throw "GitHub returned an invalid build identifier." }
+  $Repo = "https://raw.githubusercontent.com/$RepoOwner/$RepoName/$Build"
+  Write-Host "Latest build: $Build" -ForegroundColor Yellow
+
+  # Continue with files from this exact commit.
   $Setup = Join-Path $Folder "install_theend.ps1"
   Invoke-WebRequest -UseBasicParsing -Uri "$Repo/install_theend.ps1" -OutFile $Setup
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
