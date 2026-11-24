@@ -376,11 +376,12 @@ PENDING_WHEAT_TARGET=None
 WHEAT_CONFIRMATIONS=0
 
 def run_visual_resource_collection():
-    """Scan all visible green resource bubbles in one frame; tap and verify one by one."""
-    global PENDING_WHEAT_TARGET,WHEAT_CONFIRMATIONS
+    """Scan resource-bubble candidates and report only visually verified disappearances."""
+    global PENDING_WHEAT_TARGET,WHEAT_CONFIRMATIONS,LAST_WHEAT_DIAG
     try:
         png=screen_png()
         targets=find_collection(png,[])
+        initial_count=len(targets)
         now=time.time()
         if not targets:
             if now-LAST_WHEAT_DIAG>=15:
@@ -389,14 +390,13 @@ def run_visual_resource_collection():
                 LAST_WHEAT_DIAG=now
             PENDING_WHEAT_TARGET=None
             WHEAT_CONFIRMATIONS=0
-            return
+            return {"found":0,"attempted":0,"visually_confirmed":0,"reason":"no_candidates"}
         w,h=get_screen_size()
         print(time.strftime("%H:%M:%S"),"Один проход сканирования:",
               len(targets),"кандидат(ов):",
               "; ".join(f'({z["x"]},{z["y"]}) {z["conf"]:.1f}%' for z in targets[:8]))
         collected=0
         attempts=0
-        # Re-scan after every successful tap because the map may shift.
         while targets and attempts<5:
             target=next((z for z in targets
                 if time.time()-LAST_VISUAL_TAPS.get(
@@ -421,11 +421,14 @@ def run_visual_resource_collection():
             print(time.strftime("%H:%M:%S"),
                   "Визуально подтверждено: значок исчез или изменился после нажатия.")
         print(time.strftime("%H:%M:%S"),"Итог цикла сбора:",
-              "подтверждено",collected,"| найдено изначально",len(targets))
+              "подтверждено",collected,"| найдено изначально",initial_count)
         PENDING_WHEAT_TARGET=None
         WHEAT_CONFIRMATIONS=0
+        return {"found":initial_count,"attempted":attempts,"visually_confirmed":collected,
+                "reason":"visual_change" if collected else "not_confirmed"}
     except Exception as e:
         print(time.strftime("%H:%M:%S"),"Визуальный сбор ресурсов:",str(e)[:200])
+        return {"found":0,"attempted":0,"visually_confirmed":0,"reason":"error: "+str(e)[:240]}
 
 
 def tap(x,y):
@@ -756,7 +759,17 @@ def execute_task(instruction, activities):
                 pending.append("Диагностика экрана: "+str(e)[:300])
             continue
         if key=="offline_production":
-            pending.append("Сбор производства пока отключён: распознавание верхней панели по OCR не подтверждает назначение кнопки. Нужна отдельная проверенная модель экрана.")
+            outcome=run_visual_resource_collection()
+            if outcome.get("visually_confirmed",0)>0:
+                completed.append("Сбор ресурсов: визуально исчезло значков "+str(outcome["visually_confirmed"])+
+                                 " из "+str(outcome.get("found",0))+
+                                 "; серверное начисление ресурсов игрой не подтверждено")
+            elif outcome.get("reason")=="no_candidates":
+                pending.append("Сбор ресурсов: на экране не найдено подходящих значков; нажатий не было.")
+            else:
+                pending.append("Сбор ресурсов не подтверждён: "+str(outcome.get("reason","неизвестная причина"))+
+                               ". Найдено кандидатов: "+str(outcome.get("found",0))+
+                               ", попыток: "+str(outcome.get("attempted",0))+".")
             continue
         if key not in SEMANTIC_MODULES:
             pending.append(key+": модуль ещё не реализован.")
