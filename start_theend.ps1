@@ -1,6 +1,6 @@
 # TheEnd one-click launcher for Windows / LDPlayer
 $ErrorActionPreference = "Stop"
-$Build = "ebc5ca5b4285ba136d52c283a63eec89ca239b4a"
+$Build = "bcfc73deea286f6d0cb6807d7ad6a8d5c239d8e2"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/$Build"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Folder
