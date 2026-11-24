@@ -21,7 +21,7 @@ jobs:
   android-session:
     name: Protected cloud Android session
     runs-on: ubuntu-24.04
-    timeout-minutes: 350
+    timeout-minutes: 45
     env:
       ACCESS_EMAIL: ${{ inputs.access_email || 'uroff265@gmail.com' }}
       THEEND_REMOTE_TOKEN: cloudflare-otp-protected
@@ -33,12 +33,12 @@ jobs:
           sudo apt-get install -y curl python3
           curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
           sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
-      - name: Enable KVM or configure safe software fallback
+      - name: Enable Android KVM or configure safe software fallback
         run: |
           if [ -e /dev/kvm ]; then
             echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
             sudo udevadm control --reload-rules
-            sudo udevadm trigger --name-match=kvm
+            sudo udevadm trigger --name-match=kvm || true
           fi
           if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
             echo "KVM acceleration is available."
@@ -46,11 +46,12 @@ jobs:
             echo "KVM is unavailable; enabling Android Emulator TCG fallback."
             echo "ANDROID_I_WANT_MY_TCG=yes" >> "$GITHUB_ENV"
           fi
-      - name: Boot Android with Play Store and publish protected browser session
+      - name: Boot Android and publish protected browser session
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis_playstore
+          # Match the google_apis image that passed the cloud ADB/screenshot job.
+          target: google_apis
           arch: x86_64
           profile: pixel_2
           disable-animations: true
