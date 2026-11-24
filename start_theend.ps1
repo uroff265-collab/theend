@@ -1,7 +1,7 @@
 # TheEnd one-click launcher for Windows / LDPlayer
 $ErrorActionPreference = "Stop"
 $Repo = "https://raw.githubusercontent.com/uroff265-collab/theend/main"
-$Build = "029c4caaae7948225e6ed0b323926b915a00825f"
+$Build = "8ed72ffb765bf3dcb7ba2bdff3c2c39439d117bd"
 $Folder = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Folder
 
@@ -13,8 +13,8 @@ Invoke-WebRequest "$Repo/install_theend.ps1`?v=$Build" -OutFile $Setup
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Setup
 if ($LASTEXITCODE -ne 0) { throw "TheEnd setup failed. See the setup messages above." }
 
-# The agent passes the model folder explicitly to Tesseract; avoid a conflicting inherited TESSDATA_PREFIX.
-Remove-Item Env:TESSDATA_PREFIX -ErrorAction SilentlyContinue
+# Set an unquoted tessdata directory for the child agent process.
+$env:TESSDATA_PREFIX = Join-Path $env:LOCALAPPDATA "TheEnd\tessdata"
 $TesseractDir = "C:\Program Files\Tesseract-OCR"
 if (Test-Path (Join-Path $TesseractDir "tesseract.exe")) {
   $env:PATH = $TesseractDir + ";" + $env:PATH
