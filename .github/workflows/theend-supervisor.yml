@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   static:
-    name: Free offline security checks
+    name: Free offline security and task audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -42,6 +42,15 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SHA: ${{ github.sha }}
         run: python supervisor/static_audit.py
+      - name: Audit task completion claims against proof
+        run: python tools/theend_supervisor.py
+      - name: Upload task audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theend-supervisor-task-report
+          path: supervisor/latest-audit.json
+          retention-days: 14
 
   ai:
     name: Optional paid AI review
