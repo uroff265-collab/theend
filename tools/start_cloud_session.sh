@@ -64,6 +64,7 @@ set +x
 THEEND_REMOTE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export THEEND_REMOTE_TOKEN
 echo "::add-mask::$THEEND_REMOTE_TOKEN"
+printf '%s\\n' "${URL:-}" > /tmp/theend-cloud-session-link.txt
 set -x
 python3 tools/cloud_android_remote.py >/tmp/theend-remote.log 2>&1 &
 REMOTE_PID=$!
