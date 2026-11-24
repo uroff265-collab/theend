@@ -64,11 +64,15 @@ TESSDATA_ARGS=""
 def configure_ocr():
     global TESSDATA_ARGS
     if not OCR: raise SystemExit("Установи зависимости: py -m pip install pillow opencv-python-headless numpy")
-    local=os.environ.get("LOCALAPPDATA","") if os.name=="nt" else ""
-    folder=os.path.join(local,"TheEnd","tessdata") if local else ""
-    if not folder or not os.path.isdir(folder):
-        folder=os.path.join(os.path.dirname(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),"tessdata")
-    if folder and os.path.isdir(folder):
+    # Use an explicitly configured or project-local tessdata folder first.
+    # Never create or write to AppData.
+    project_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)),"tessdata")
+    configured=os.environ.get("THEEND_TESSDATA","").strip()
+    candidates_data=[configured,project_folder,
+        r"C:\Program Files\Tesseract-OCR\tessdata",
+        r"C:\Program Files (x86)\Tesseract-OCR\tessdata"]
+    folder=next((p for p in candidates_data if p and os.path.isdir(p)), "")
+    if folder:
         os.environ["TESSDATA_PREFIX"]=folder
     candidates=[shutil.which("tesseract"),r"C:\Program Files\Tesseract-OCR\tesseract.exe",r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]
     exe=next((p for p in candidates if p and (os.path.isfile(p) if os.path.isabs(p) else True)),None)
