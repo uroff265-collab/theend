@@ -10,6 +10,9 @@ on:
         default: false
   push:
     branches: [main, feature/theend-supervisor-mvp]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     - cron: "17 * * * *"
 
