@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Evidence-based supervisor for TheEnd project tasks.
 
-This tool does not monitor ChatGPT's internal reasoning. It audits project work
-against explicit acceptance criteria and refuses to mark tasks complete without
-evidence recorded in supervisor/tasks.json.
+Audits work against acceptance criteria and evidence in supervisor/tasks.json.
+It cannot inspect ChatGPT's private reasoning; it checks committed project facts.
 """
 import json
+import os
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
@@ -24,24 +24,35 @@ def audit():
         missing = [c for c in criteria if not any(
             e.get("criterion") == c and e.get("proof") for e in evidence
         )]
-        declared_done = task.get("status") == "done"
+        claimed_done = task.get("status") == "done"
         results.append({
             "id": task.get("id", "unknown"),
             "title": task.get("title", ""),
             "declared_status": task.get("status", "blocked"),
             "verdict": "PASS" if criteria and not missing else "INCOMPLETE",
             "missing_evidence": missing,
-            "done_claim_without_proof": declared_done and bool(missing),
+            "done_claim_without_proof": claimed_done and bool(missing),
         })
+    overall = "PASS" if results and all(r["verdict"] == "PASS" for r in results) else "INCOMPLETE"
     report = {
         "audited_at": datetime.now(timezone.utc).isoformat(),
-        "overall": "PASS" if results and all(r["verdict"] == "PASS" for r in results) else "INCOMPLETE",
+        "overall": overall,
         "tasks": results,
     }
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if report["overall"] == "PASS" else 1
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path, "a", encoding="utf-8") as summary:
+            summary.write(f"## TheEnd supervisor: {overall}\\n\\n")
+            for item in results:
+                summary.write(f"- **{item['id']} — {item['title']}**: {item['verdict']}\\n")
+                if item["missing_evidence"]:
+                    summary.write("  - Missing proof: " + "; ".join(item["missing_evidence"]) + "\\n")
+    # Incomplete work is reported but does not fail the build. A false "done"
+    # claim does fail, so the supervisor catches unsupported completion claims.
+    return 1 if any(r["done_claim_without_proof"] for r in results) else 0
 
 
 if __name__ == "__main__":
