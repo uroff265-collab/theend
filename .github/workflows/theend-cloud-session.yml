@@ -1,16 +1,14 @@
 name: TheEnd cloud game session
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/theend-cloud-session.yml'
-      - 'tools/cloud_android_remote.py'
-      - 'tools/start_cloud_session.sh'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: theend-cloud-android-session
+  cancel-in-progress: true
 
 jobs:
   android-session:
