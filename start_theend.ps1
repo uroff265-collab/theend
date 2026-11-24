@@ -46,7 +46,7 @@ foreach ($RequiredFile in @($Agent, $Vision)) {
   }
 }
 $AgentText = Get-Content -Raw -Encoding UTF8 $Agent
-if ($AgentText -notmatch "TheEnd Agent v19" -or $AgentText -notmatch "Диагностика пшеницы: кадр") {
+if ($AgentText -notmatch "TheEnd Agent v19" -or $AgentText -notmatch "find_visual_resource_badges") {
   throw "Downloaded agent is not the expected V19 diagnostics build. Refusing to start an outdated or incomplete file."
 }
 Write-Host "Verified agent build: V19 wheat diagnostics" -ForegroundColor Green
