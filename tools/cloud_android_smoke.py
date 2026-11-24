@@ -9,13 +9,19 @@ SCREENSHOT = Path("/tmp/theend-cloud-screen.png")
 
 
 def run(command, check=True, binary=False):
-    result = subprocess.run(command, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, timeout=90)
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE if binary else subprocess.STDOUT,
+        timeout=90,
+    )
     output = result.stdout if binary else result.stdout.decode(errors="replace").strip()
+    error = result.stderr.decode(errors="replace").strip() if binary else ""
     if not binary and output:
         print(output, flush=True)
     if check and result.returncode:
-        raise RuntimeError(f"{' '.join(command)} failed: {output}")
+        detail = error or output
+        raise RuntimeError(f"{' '.join(command)} failed: {detail}")
     return output
 
 

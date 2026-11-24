@@ -7,6 +7,7 @@ on:
       - '.github/workflows/theend-cloud-session.yml'
       - 'tools/cloud_android_remote.py'
       - 'tools/start_cloud_session.sh'
+      - 'tools/boot_cloud_android.sh'
   workflow_dispatch:
 
 permissions:
@@ -41,16 +42,15 @@ jobs:
             echo "KVM is unavailable; enabling Android Emulator TCG fallback."
             echo "ANDROID_I_WANT_MY_TCG=yes" >> "$GITHUB_ENV"
           fi
-      - name: Boot Android and publish protected browser session
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Boot Android emulator without the flaky action ADB handoff
+        run: bash tools/boot_cloud_android.sh --start-only
+      - name: Publish protected browser session
+        run: bash tools/start_cloud_session.sh
+      - name: Upload cloud Android startup screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          api-level: 30
-          # Include Google Play so the official Last Asylum listing can be opened.
-          # localhost.run may return hosts such as <id>.app.lhr.life; the API accepts that form.
-          target: google_apis_playstore
-          arch: x86_64
-          profile: pixel_2
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
-          emulator-boot-timeout: 1200
-          script: bash tools/start_cloud_session.sh
+          name: theend-cloud-session-screen
+          path: /tmp/theend-cloud-screen.png
+          if-no-files-found: ignore
+          retention-days: 1
