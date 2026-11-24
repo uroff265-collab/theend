@@ -44,3 +44,50 @@ jobs:
         run: npm install
       - name: Check API syntax
         run: node --check server.js
+
+  android-cloud:
+    name: Free cloud Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install agent dependencies and OCR
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus
+          python -m pip install --upgrade pip numpy opencv-python-headless pillow pytesseract
+      - name: Boot Android emulator and test ADB capture
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb devices
+            adb shell getprop ro.build.version.release
+            adb shell wm size 1080x1920
+            adb exec-out screencap -p > /tmp/theend-cloud-screen.png
+            python - <<'PY'
+            from PIL import Image
+            import cv2, numpy as np
+            p='/tmp/theend-cloud-screen.png'
+            im=Image.open(p)
+            im.verify()
+            frame=cv2.imdecode(np.fromfile(p,dtype=np.uint8),cv2.IMREAD_COLOR)
+            assert frame is not None and frame.size > 0, 'OpenCV could not read emulator screenshot'
+            print('ANDROID_EMULATOR_OK', frame.shape, 'screenshot_bytes=', __import__('os').path.getsize(p))
+            PY
+      - name: Upload cloud emulator screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theend-android-cloud-screen
+          path: /tmp/theend-cloud-screen.png
+          if-no-files-found: ignore
+          retention-days: 1
