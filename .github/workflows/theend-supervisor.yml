@@ -26,12 +26,12 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
       - name: Run Supervisor
         env:
-          OPENAI_API_KEY: __OPENAI_SECRET__
-          THEEND_SUPERVISOR_MODEL: __MODEL_VARIABLE__
-          GITHUB_TOKEN: __GITHUB_TOKEN__
-          GITHUB_REPOSITORY: __REPOSITORY__
-          GITHUB_SHA: __COMMIT__
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          THEEND_SUPERVISOR_MODEL: ${{ vars.THEEND_SUPERVISOR_MODEL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
         run: python supervisor/audit.py
