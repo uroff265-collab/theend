@@ -714,9 +714,9 @@ def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
     if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit(r"ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v17 запущен | build 2026-11-24-screen-diagnostic")
+    print("TheEnd Agent v18 запущен | build 2026-11-24-visual-wheat-collection")
     print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
-    print("Безопасный режим: только контекстные кнопки Android UI; слепые координаты и OCR-сбор отключены.")
+    print("Режим: визуальное распознавание значков сбора пшеницы по шаблону; OCR не используется для поиска этих значков.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
         now=time.time(); online=connected()
