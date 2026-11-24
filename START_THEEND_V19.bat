@@ -3,7 +3,7 @@ title TheEnd V19 - fresh diagnostic launcher
 set "WORK=%TEMP%\TheEnd_V19"
 if not exist "%WORK%" mkdir "%WORK%"
 echo Downloading fresh TheEnd V19 launcher...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/uroff265-collab/theend/a59c33f537522bbe43ab1f71520b992e0cda0014/start_theend.ps1' -OutFile (Join-Path $env:TEMP 'TheEnd_V19\start_theend.ps1'); Write-Host 'Fresh launcher downloaded to %TEMP%\TheEnd_V19' "
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/uroff265-collab/theend/19c23e38e9b1b976aef9648fdedf4d7efed16956/start_theend.ps1' -OutFile (Join-Path $env:TEMP 'TheEnd_V19\start_theend.ps1'); Write-Host 'Fresh launcher downloaded to %TEMP%\TheEnd_V19' "
 if errorlevel 1 (
   echo Failed to download the fresh launcher.
   pause
