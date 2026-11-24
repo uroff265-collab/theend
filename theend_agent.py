@@ -8,6 +8,35 @@ BASE_URL=os.environ.get("THEEND_URL","https://theend-1.onrender.com").strip().rs
 ADB=os.environ.get("THEEND_ADB",r"C:\platform-tools\adb.exe" if os.name=="nt" else "adb").strip()
 SERIAL=os.environ.get("THEEND_ADB_SERIAL","127.0.0.1:5555").strip()
 DEVICE=os.environ.get("THEEND_DEVICE_NAME",platform.node() or "Android emulator")
+
+# Optional protected cloud Android browser endpoint. Keep its private key local.
+REMOTE_ANDROID_URL=os.environ.get("THEEND_REMOTE_ANDROID_URL","").strip()
+
+def remote_request(path, payload=None, timeout=20):
+    if not REMOTE_ANDROID_URL:
+        raise RuntimeError("THEEND_REMOTE_ANDROID_URL is not configured.")
+    from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qsl
+    parts=urlsplit(REMOTE_ANDROID_URL)
+    query=dict(parse_qsl(parts.query,keep_blank_values=True))
+    key=query.get("k","")
+    if not key:
+        raise RuntimeError("Cloud Android URL must include its private ?k= key.")
+    url=urlunsplit((parts.scheme,parts.netloc,path,urlencode({"k":key}),""))
+    headers={"Cache-Control":"no-store"}
+    data=None
+    if payload is not None:
+        data=json.dumps(payload).encode()
+        headers["Content-Type"]="application/json"
+    req=urllib.request.Request(url,data=data,headers=headers,method="POST" if data is not None else "GET")
+    with urllib.request.urlopen(req,timeout=timeout) as response:
+        return response.read()
+
+def remote_frame():
+    data=remote_request("/frame",timeout=25)
+    if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
+        raise RuntimeError("Cloud Android returned an invalid screenshot.")
+    return data
+
 SCAN_SECONDS=5
 COMMAND_POLL_SECONDS=12
 COOLDOWN=35
@@ -39,10 +68,35 @@ def token_value():
 TOKEN=None
 
 def adb(*args,timeout=6,binary=False):
+    if REMOTE_ANDROID_URL:
+        parts=list(args)
+        if parts[:2]==["exec-out","screencap"] and parts[2:]==["-p"]:
+            result=remote_frame()
+            return result if binary else result.decode("utf-8","replace")
+        if len(parts)>=4 and parts[:2]==["shell","input"]:
+            action=parts[2]
+            if action=="tap" and len(parts)==5:
+                remote_request("/input",{"type":"tap","x":int(parts[3]),"y":int(parts[4])})
+            elif action=="swipe" and len(parts) in (8,9):
+                remote_request("/input",{"type":"swipe","x":int(parts[3]),"y":int(parts[4]),
+                    "x2":int(parts[5]),"y2":int(parts[6]),"ms":int(parts[7])})
+            elif action=="keyevent" and len(parts)==4:
+                remote_request("/input",{"type":"key","code":int(parts[3])})
+            else:
+                raise RuntimeError("Unsupported cloud Android command: "+" ".join(parts[:4]))
+            return b"" if binary else ""
+        raise RuntimeError("ADB operation unavailable in cloud-browser mode: "+" ".join(parts[:4]))
     r=subprocess.run([ADB,"-s",SERIAL,*args],capture_output=True,timeout=timeout,check=True)
     return r.stdout if binary else r.stdout.decode("utf-8","replace")
 
 def connected():
+    if REMOTE_ANDROID_URL:
+        try:
+            remote_frame()
+            return True
+        except Exception as e:
+            print("Облачный Android недоступен:",str(e)[:160])
+            return False
     try:
         r=subprocess.run([ADB,"devices"],capture_output=True,text=True,timeout=8,check=True)
         return any(x.split()[:2]==[SERIAL,"device"] for x in r.stdout.splitlines()[1:])
@@ -813,9 +867,9 @@ def poll_game_task(activities):
 def main():
     global TOKEN
     TOKEN=token_value(); configure_ocr()
-    if not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit(r"ADB не найден: проверь C:\platform-tools\adb.exe")
-    print("TheEnd Agent v19 запущен | build 2026-11-24-wheat-diagnostics")
-    print("Сервер:",BASE_URL,"| Эмулятор:",SERIAL)
+    if not REMOTE_ANDROID_URL and not (shutil.which(ADB) or os.path.isfile(ADB)): raise SystemExit(r"ADB не найден: проверь C:\\platform-tools\\adb.exe")
+    print("TheEnd Agent v19 запущен | build 2026-11-25-cloud-bridge")
+    print("Сервер:",BASE_URL,"| Режим:", "облачный HTTP" if REMOTE_ANDROID_URL else "локальный ADB", "| Эмулятор:",SERIAL)
     print("Режим: поиск игровых значков ресурсов по изображению; OCR не используется для поиска значков.")
     last_beat=last_scan=last_command_poll=last_config_poll=last_task_poll=0; last_key=None; last_action=0; activities={}; active_modules=()
     while True:
