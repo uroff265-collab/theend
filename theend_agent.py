@@ -315,7 +315,7 @@ WHEAT_ICON_TEMPLATE_B64="iVBORw0KGgoAAAANSUhEUgAAACkAAAAbCAIAAABusDEHAAAJsElEQVR
 LAST_WHEAT_DIAG=0
 
 def find_visual_resource_badges(png):
-    """Find wheat badges and expose a throttled confidence diagnostic."""
+    """Find wheat badges using a small multi-scale template search."""
     global LAST_WHEAT_DIAG
     if cv2 is None or np is None: return []
     frame=cv2.imdecode(np.frombuffer(png,dtype=np.uint8),cv2.IMREAD_COLOR)
@@ -324,30 +324,47 @@ def find_visual_resource_badges(png):
     raw=base64.b64decode(WHEAT_ICON_TEMPLATE_B64)
     template=cv2.imdecode(np.frombuffer(raw,dtype=np.uint8),cv2.IMREAD_COLOR)
     if template is None: return []
-    scale=w/900.0
-    tw=max(12,int(template.shape[1]*scale)); th=max(12,int(template.shape[0]*scale))
-    template=cv2.resize(template,(tw,th),interpolation=cv2.INTER_CUBIC)
     gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-    templ=cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
-    x0,x1=int(w*.34),int(w*.91); y0,y1=int(h*.025),int(h*.19)
+    x0,x1=int(w*.34),int(w*.91)
+    y0,y1=int(h*.025),int(h*.19)
     roi=gray[y0:y1,x0:x1]
-    if roi.shape[0]<th or roi.shape[1]<tw: return []
-    scores=cv2.matchTemplate(roi,templ,cv2.TM_CCOEFF_NORMED)
-    _,best_score,_,best_loc=cv2.minMaxLoc(scores)
+    base_scale=w/900.0
+    best_score=-1.0
+    best_scale=1.0
+    best_scores=None
+    best_size=None
+    # UI badge size can vary with emulator DPI and game scaling.
+    for factor in (0.75,0.85,0.95,1.0,1.05,1.15,1.25):
+        tw=max(12,int(template.shape[1]*base_scale*factor))
+        th=max(12,int(template.shape[0]*base_scale*factor))
+        if roi.shape[0]<th or roi.shape[1]<tw: continue
+        scaled=cv2.resize(template,(tw,th),interpolation=cv2.INTER_CUBIC)
+        templ=cv2.cvtColor(scaled,cv2.COLOR_BGR2GRAY)
+        scores=cv2.matchTemplate(roi,templ,cv2.TM_CCOEFF_NORMED)
+        _,score,_,_=cv2.minMaxLoc(scores)
+        if float(score)>best_score:
+            best_score=float(score)
+            best_scale=factor
+            best_scores=scores
+            best_size=(tw,th)
+    if best_scores is None: return []
     now=time.time()
     if now-LAST_WHEAT_DIAG>=30:
         print(time.strftime("%H:%M:%S"),
               "Диагностика пшеницы: кадр",f"{w}x{h}",
               "| область",f"{x0}:{x1},{y0}:{y1}",
-              "| лучшее совпадение",round(float(best_score),3),
+              "| лучшее совпадение",round(best_score,3),
+              "| масштаб шаблона",round(best_scale,2),
               "| порог 0.600")
         LAST_WHEAT_DIAG=now
     found=[]
-    work=scores.copy()
+    work=best_scores.copy()
+    tw,th=best_size
     while True:
         _,score,_,loc=cv2.minMaxLoc(work)
         if score<0.60: break
-        x=x0+loc[0]+tw//2; y=y0+loc[1]+th//2
+        x=x0+loc[0]+tw//2
+        y=y0+loc[1]+th//2
         if all(abs(x-z["x"])>tw*.8 or abs(y-z["y"])>th*.8 for z in found):
             found.append({"x":int(x),"y":int(y),"confidence":round(float(score),3)})
         xx,yy=loc
