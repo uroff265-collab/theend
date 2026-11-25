@@ -59,6 +59,5 @@ jobs:
           name: theend-cloud-session-screen
           path: |
             /tmp/theend-cloud-screen.png
-            /tmp/theend-cloud-session-link.txt
           if-no-files-found: ignore
           retention-days: 1
