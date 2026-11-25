@@ -92,18 +92,24 @@ if [ -z "$URL" ]; then cat /tmp/theend-tunnel.log; echo "CLOUDFLARE_QUICK_TUNNEL
 echo "CHECKPOINT_TUNNEL_CREATED $URL"
 printf '%s\n' "$URL/?k=$THEEND_REMOTE_TOKEN" > /tmp/theend-cloud-session-link.txt
 
-# Wait briefly for the new edge route to propagate; avoid repeated noisy probes.
+# Quick Tunnel DNS and edge routing can take several minutes to propagate.
+# Do not treat the tunnel URL appearing in the log as proof it is reachable.
 FRAME_OK=0
-for i in $(seq 1 6); do
-  if curl -fsS --max-time 25 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png &&
-     head -c 8 /tmp/theend-public-frame.png | od -An -tx1 | grep -qi '89 50 4e 47 0d 0a 1a 0a'; then
-    FRAME_OK=1
-    break
+for i in $(seq 1 30); do
+  if getent ahosts "${URL#https://}" >/dev/null 2>&1; then
+    if curl -fsS --connect-timeout 10 --max-time 30 "$URL/frame?k=$THEEND_REMOTE_TOKEN" -o /tmp/theend-public-frame.png &&
+       head -c 8 /tmp/theend-public-frame.png | od -An -tx1 | grep -qi '89 50 4e 47 0d 0a 1a 0a'; then
+      FRAME_OK=1
+      break
+    fi
+  else
+    echo "Quick Tunnel DNS not propagated yet (attempt $i/30)"
   fi
+  if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then cat /tmp/theend-tunnel.log; exit 1; fi
   sleep 10
 done
 if [ "$FRAME_OK" -ne 1 ]; then
-  echo "PUBLIC_ANDROID_FRAME_CHECK_FAILED"
+  echo "PUBLIC_ANDROID_FRAME_CHECK_FAILED_AFTER_DNS_AND_EDGE_RETRIES"
   cat /tmp/theend-tunnel.log
   exit 1
 fi
